@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 description = "ARC-AGI submission"
 homepage = "https://github.com/intelligentnet/arcagi"
 repository = "https://github.com/intelligentnet/arcagi"
-documentation = "https://docs.rs/arcagi"
+documentation = "https://docs.rs/arc_agi"
 keywords = ["arc-agi", "agi", "learning", "symbolic"]
 #categories = ["computer-vision"]
 

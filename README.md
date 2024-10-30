@@ -1,7 +1,14 @@
 # arcagi
 A Rust attempt at the ARC-AGI prize 2024
 
-NOTE: This code is messy and imcomplete and is likely to change rapidly.
+WARNING:
+-----
+This code is messy and imcomplete and is likely to change rapidly. At the
+moment it is a set of experiments to guage what works well and what does not.
+It is perhaps 20% complete and will answer just over 10% of the examples given.
+
+Background
+----------
 
 The Kaggle ARC-AGI challenge 2024 is an attempt to get computers to solve
 visual 2D puzzles, similar to those in many IQ test. To solve this challenge
@@ -29,3 +36,26 @@ See inet submission.
 To run this the first parameter is one of 'training', 'evaluation' or 'test'. There is no solutions file for the test run, this is expected so ignore the error message. A second parameter can be supplied which is the test to run, useful
 for testing individual cases. A typical call to run the training set would be
 'cargo run --release training'. 
+
+Kaggle notebook
+---------------
+
+```
+from cffi import FFI
+ffi = FFI()
+ffi.cdef("int test();")
+rust = ffi.dlopen("/kaggle/input/release/libarc_agi.so")
+a = rust.test();
+print(a)
+```
+
+NOTE
+----
+
+To compile the above for kaggle a docker image needs to be created and the .so
+file uploaded and referenced, somewhat tedious. It will run locally for public
+data test with cargo as normal. A release version should run in less that a
+second on most machines, this will change as more cases are completed.
+
+Currently there is a problem with the above, with kaggle scoring on the
+private dataset. Only run locally on public data for now or join the inet team.
