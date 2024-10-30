@@ -2,12 +2,20 @@
 name = "arc-agi"
 version = "0.1.0"
 edition = "2021"
+authors = ["Chris Dipple <chris@intelligent-net.co.uk>"]
+license = "MIT OR Apache-2.0"
+description = "ARC-AGI submission"
+homepage = "https://github.com/intelligentnet/argagi"
+repository = "https://github.com/intelligentnet/argagi"
+documentation = "https://docs.rs/argagi"
+keywords = ["arc-agi", "agi", "machine learning", "symbolic"]
+#categories = ["computer-vision"]
 
 [dependencies]
 serde = "^1.0.124"
 serde_json = "^1.0"
 serde_derive = "^1"
-stemplate = "^0.1"
+#stemplate = "^0.1"
 num-traits = "^0.2.19"
 array_tool = "^1.0.3"
 pathfinding = "^4.10.0"
