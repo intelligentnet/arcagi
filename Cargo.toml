@@ -1,0 +1,21 @@
+[package]
+name = "arc-agi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "^1.0.124"
+serde_json = "^1.0"
+serde_derive = "^1"
+stemplate = "^0.1"
+num-traits = "^0.2.19"
+array_tool = "^1.0.3"
+pathfinding = "^4.10.0"
+itertools  = "^0.13"
+crc = "^3.2.1"
+#regex = "^1.10"
+#peg = "^0.8"
+
+[lib]
+name = "arc_agi"
+crate-type = ["rlib", "dylib"]
