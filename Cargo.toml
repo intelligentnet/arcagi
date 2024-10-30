@@ -8,7 +8,7 @@ description = "ARC-AGI submission"
 homepage = "https://github.com/intelligentnet/argagi"
 repository = "https://github.com/intelligentnet/argagi"
 documentation = "https://docs.rs/argagi"
-keywords = ["arc-agi", "agi", "machine learning", "symbolic"]
+keywords = ["arc-agi", "agi", "learning", "symbolic"]
 #categories = ["computer-vision"]
 
 [dependencies]
