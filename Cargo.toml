@@ -1,13 +1,13 @@
 [package]
 name = "arc-agi"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Chris Dipple <chris@intelligent-net.co.uk>"]
 license = "MIT OR Apache-2.0"
 description = "ARC-AGI submission"
-homepage = "https://github.com/intelligentnet/argagi"
-repository = "https://github.com/intelligentnet/argagi"
-documentation = "https://docs.rs/argagi"
+homepage = "https://github.com/intelligentnet/arcagi"
+repository = "https://github.com/intelligentnet/arcagi"
+documentation = "https://docs.rs/arcagi"
 keywords = ["arc-agi", "agi", "learning", "symbolic"]
 #categories = ["computer-vision"]
 
