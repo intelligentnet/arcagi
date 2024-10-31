@@ -13,7 +13,7 @@ Background
 The Kaggle ARC-AGI challenge 2024 is an attempt to get computers to solve
 visual 2D puzzles, similar to those in many IQ test. To solve this challenge
 in a principled way requires perception of stucture and reasoning guided by 
-comstraints. It currently cannot be solved by LLM/GenAI based methods though
+constraints. It currently cannot be solved by LLM/GenAI based methods though
 there may be a small place for them (or possibly just simple Neural Networks
 for specific recognition tasks). 
 
@@ -22,12 +22,24 @@ the puzzles in the challenge, but at the moment solves just over 10%. Much
 more work is required to reach the 85% or better level. 
 
 This prize in important because it will demonstrate reasoning abilities and
-not just the memorisztion with some 'light' generalisation that is currently
+not just the memoristion with some 'light' generalisation that is currently
 demonstrated by all Gen-AI models (in fact all Machine Learning models). 
 
 Abstraction, Generalisation and Functional composition are key concepts.
 These work in tandem with constraint recognition and discovery to tame the
 size of the search space.
+
+This is a pure Symbolic AI approach and hence is deterministic. There may be a
+place for an LLM/Gen-AI in object recognition and/or generating candidate
+solutions.
+It was hoped that the author's previous experience of LLMs (see LLMClient),
+would help. It might eventually, for now there is plenty to explore with the
+current Symbolic approach.
+Code generation was experimented with, given some data
+structures and a textual description of the problem, but the code
+generated was poor quality and time consuming to debug (Rust is probably not
+the best target for code generation given it's memory management as simple
+next token prediction does not understand that).
 
 See: https://www.kaggle.com/competitions/arc-prize-2024
 
