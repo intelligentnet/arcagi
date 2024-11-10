@@ -51,12 +51,14 @@ pub fn add_dummy_output(file: &str, no_answers: usize, results: &mut BTreeMap<St
     let output_data: Vec<OutputData> = (0 .. no_answers).map(|_| OutputData { attempt_1: attempt.clone(), attempt_2: attempt.clone() }).collect();
 
     results.insert(file.to_string(), output_data);
+    //results.insert(serde_json::to_string_pretty(file).unwrap(), output_data);
 }
 
 pub fn add_real_output(file: &str, answers: &[Grid], results: &mut BTreeMap<String, Vec<OutputData>>) {
     let output_data: Vec<OutputData> = answers.iter().map(|ans| OutputData { attempt_1: ans.to_vec(), attempt_2: ans.to_vec() }).collect();
 
     results.insert(file.to_string(), output_data);
+    //results.insert(serde_json::to_string_pretty(file).unwrap(), output_data);
 }
 
 pub fn create_output(live: bool, file: &BTreeMap<String, Vec<OutputData>>) {
@@ -79,19 +81,14 @@ pub fn dir(dir: &str) -> Vec<String> {
 }
 
 pub fn load_files(data: &str) -> BTreeMap<String, Data> {
-    // Various places data can be first is for competion but supplied
-    // in local directory for convenience
     let prefix = if std::path::Path::new("../input/arc-prize-2024").is_dir() {
         "../input/arc-prize-2024/arc-agi"
-    } else if std::path::Path::new("input/arc-prize-2024").is_dir() {
-        "input/arc-prize-2024/arc-agi"
     } else if std::path::Path::new("kaggle/working").is_dir() {
         "kaggle/working/arc-agi"
     } else {
         "/kaggle/working/arc-agi"
     };
-    //eprintln!("#### {prefix}");
-
+eprintln!("#### {prefix}");
     let training_suffix = "challenges.json";
     let solution_suffix = "solutions.json";
     let training = format!("{}_{}_{}", prefix, data, training_suffix);

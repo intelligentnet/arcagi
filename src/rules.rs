@@ -33,6 +33,24 @@ pub fn gravity_only(grid: &Grid, n: &mut usize) -> Grid {
     }
 }
 
+/*
+pub fn gravity_only(grid: &Grid, n: &mut usize) -> Grid {
+    let func = [&Grid::stretch_down, &Grid::gravity_down, &Grid::gravity_up];
+    apply(grid, n, &func)
+}
+
+pub fn apply(grid: &Grid, n: &mut usize, func: &[&dyn Fn(&Grid) -> Grid]) -> Grid {
+    if *n == usize::MAX {
+        *n = func.len();
+    }
+    if *n == 0 {
+        Grid::trivial()
+    } else {
+        func[func.len() - *n](grid)
+    }
+}
+*/
+
 pub fn diff_only(grid: &Grid, colour: Colour, n: &mut usize) -> Grid {
     let func = [Grid::diff_only_and, Grid::diff_only_or, Grid::diff_only_xor, Grid::diff_black_same, Grid::diff_other_same];
     if *n == usize::MAX {

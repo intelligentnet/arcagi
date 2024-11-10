@@ -116,6 +116,20 @@ impl Shape {
         Self { ox: 0, oy: 0, colour, cells, cats, io_edges }
     }
 
+    pub fn new_sized_coloured_position(ox: usize, oy: usize, x: usize, y: usize, colour: Colour) -> Self {
+        let mut cells: Matrix<Cell> = Matrix::from_fn(x, y, |(_, _)| Cell::new(0, 0, Colour::to_usize(colour)));
+
+        for (x, y) in cells.clone().keys() {
+            cells[(x, y)].x = x + ox;
+            cells[(x, y)].y = y + oy;
+        }
+
+        let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
+        let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
+
+        Self { ox, oy, colour, cells, cats, io_edges }
+    }
+
     pub fn new_empty() -> Self {
         let cells: Matrix<Cell> = Matrix::from_fn(0, 0, |(_, _)| Cell::new_empty());
         let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
@@ -203,6 +217,58 @@ impl Shape {
 
     pub fn trivial() -> Self {
         Self::new_empty()
+    }
+
+    pub fn full(&self) -> bool {
+        if self.cells.rows == 0 {
+            return false;
+        }
+        for c in self.cells.values() {
+            if c.colour == Colour::Black {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn same_patch(&self, other: &Self) -> bool {
+        if self.size() != other.size() || self.cells.rows != other.cells.rows {
+            return false;
+        }
+
+        for (xy, c) in self.cells.items() {
+            if c.colour != Colour::Black && c.colour != other.cells[xy].colour {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn fill(&self, other: &Self) -> Self {
+        if self.size() != other.size() || !self.is_square() {
+            return self.clone();
+        }
+
+        let mut shape = self.clone();
+
+        for xy in self.cells.keys() {
+            if self.cells[xy].colour == Colour::Black {
+                shape.cells[xy].colour = other.cells[xy].colour;
+            }
+        }
+        
+        shape
+    }
+
+    pub fn make_symmetric(&self) -> Self {
+        let shape = self.clone();
+        let shape = shape.fill(&shape.rotated_90());
+        let shape = shape.fill(&shape.rotated_180());
+        let shape = shape.fill(&shape.rotated_270());
+
+        shape
     }
 
     // must be odd size
@@ -2346,6 +2412,59 @@ impl Shapes {
         // TODO complete
 
         None
+    }
+
+    pub fn to_shape(&self) -> Shape {
+        let mut min_x = usize::MAX;
+        let mut min_y = usize::MAX;
+        let mut max_x = 0;
+        let mut max_y = 0;
+
+        for s in self.shapes.iter() {
+            if min_x > s.ox {
+                min_x = s.ox;
+            }
+            if min_y > s.oy {
+                min_y = s.oy;
+            }
+            if max_x < s.ox + s.cells.rows {
+                max_x = s.ox + s.cells.rows;
+            }
+            if max_y < s.oy + s.cells.columns {
+                max_y = s.oy + s.cells.columns;
+            }
+        }
+
+        let mut shape = Shape::new_sized_coloured_position(min_x, min_y, max_x - min_x, max_y - min_y, Colour::Black);
+
+        shape.colour = Colour::Mixed;
+        shape.ox = min_x;
+        shape.oy = min_y;
+
+        for s in self.shapes.iter() {
+            for c in s.cells.values() {
+                //shape.cells[(x - min_x, y - min_y)] = c.clone();
+                shape.cells[(c.x - min_x, c.y - min_y)].x = c.x;
+                shape.cells[(c.x - min_x, c.y - min_y)].y = c.y;
+                shape.cells[(c.x - min_x, c.y - min_y)].colour = c.colour;
+            }
+        }
+
+        shape
+    }
+
+    pub fn border_only(&self) -> Shape {
+        let mut shape = Shape::trivial();
+
+        for s in self.shapes.iter() {
+            if s.has_border() {
+                shape = s.clone();
+
+                break;
+            }
+        }
+
+        shape
     }
 
     pub fn smallest(&self) -> Shape {

@@ -1379,9 +1379,10 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
     // Find shapes in a grid
     fn to_shapes_base(&self, same_colour: bool, diag: bool, bg: Colour) -> Shapes {
+        // TODO Fix training 2204b7a8 - left border
         fn mshape(same_colour: bool, bgc: Colour, bg: Colour, cells: &mut Matrix<Cell>, diag: bool) -> Option<(usize, usize, Matrix<Cell>)> {
             // Find starting position
-            let xy = cells.items().filter(|(_, c)| c.colour != bgc && c.colour != bg).map(|(pos, _)| pos).min();
+            let xy = cells.items().filter(|(_, c)| c.colour != bgc && c.colour != bg).map(|(xy, _)| xy).min();
 
             if let Some((x, y)) = xy {
                 let start_colour = cells[(x, y)].colour;
@@ -2134,6 +2135,45 @@ println!("BG not Black {:?}", s.colour);
         shapes.shapes = vec![s1.as_shape(), s2.as_shape()];
 
         shapes
+    }
+
+    pub fn full(&self) -> bool {
+        if self.cells.rows == 0 {
+            return false;
+        }
+        for c in self.cells.values() {
+            if c.colour == Colour::Black {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn get_patch(&self, x: usize, y: usize, rows: usize, cols: usize) -> Shape {
+        match self.cells.slice(x .. x + rows, y .. y + cols) {
+            Ok(m) => Shape::new(x, y, &m),
+            Err(_e) => {
+                //eprintln!("{e}");
+
+                Shape::trivial()
+            }
+        }
+
+    }
+
+    pub fn fill_patch_mut(&mut self, other: &Shape, ox: usize, oy: usize) {
+        if self.size() <= other.size() {
+            return;
+        }
+//println!("{} {}", ox, oy);
+
+        for (x, y) in other.cells.keys() {
+//println!("{:?}", self.cells[(ox + x, oy + y)].colour);
+            if self.cells[(ox + x, oy + y)].colour == Colour::Black {
+                self.cells[(ox + x, oy + y)].colour = other.cells[(x, y)].colour;
+            }
+        }
     }
 
     // TODO
