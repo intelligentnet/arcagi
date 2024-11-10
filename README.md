@@ -11,15 +11,16 @@ Background
 ----------
 
 The Kaggle ARC-AGI challenge 2024 is an attempt to get computers to solve
-visual 2D puzzles, similar to those in many IQ test. To solve this challenge
+visual 2D puzzles, similar to those in many IQ tests. To solve this challenge
 in a principled way requires perception of stucture and reasoning guided by 
 constraints. It currently cannot be solved by LLM/GenAI based methods though
 there may be a small place for them (or possibly just simple Neural Networks
 for specific recognition tasks). 
 
 This code is a first submission for the prize, it could conceivably solve all
-the puzzles in the challenge, but at the moment solves just over 10%. Much
-more work is required to reach the 85% or better level. 
+the puzzles in the challenge, but at the moment solves just over 10% in the
+public evaluation set. Much more work is required to reach the 85% or better
+level. 
 
 This prize in important because it will demonstrate reasoning abilities and
 not just the memoristion with some 'light' generalisation that is currently
@@ -33,8 +34,8 @@ This is a pure Symbolic AI approach and hence is deterministic. There may be a
 place for an LLM/Gen-AI in object recognition and/or generating candidate
 solutions.
 It was hoped that the author's previous experience of LLMs (see LLMClient),
-would help. It might eventually, for now there is plenty to explore with the
-current Symbolic approach.
+would help (for code generation). It might eventually, for now there is
+plenty to explore with the current Symbolic approach.
 Code generation was experimented with, given some data
 structures and a textual description of the problem, but the code
 generated was poor quality and time consuming to debug (Rust is probably not
@@ -71,3 +72,12 @@ second on most machines, this will change as more cases are completed.
 
 Currently there is a problem with the above, with kaggle scoring on the
 private dataset. Only run locally on public data for now or join the inet team.
+
+More investigation of the scoring on the secret test set was done, in addition
+to more training and evaluation examples succeeding. There is still a problem
+in that the score is always 1.00 regardless of what is done. Currently 47 
+evaluation tasks are correctly answered. The code being deterministic a binary
+chop over the top level rules can be done. If this is done over to distinct 
+halves then on both occasions 1.0 is scored, not 0.0 and 1.0 or vice versa
+as would be expected. Any halves! The submission file is correctly formatted (though lacks optional white space). A null run produces a score of 0.0 as would be expected. 
+So, very confused. 
