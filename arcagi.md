@@ -34,9 +34,9 @@ Given the simplicity of this solution it performs well on public datasets. 47 pr
 
 The biggest concern when starting this challenge was, "Will this approach generalise?". It was found that the more training problems that were solved resulted in more evaluation problems being solved. Though not at the same rate. Often solutions could be made more flexible, for example find a similar pattern in X or Y dimension and be able to solve both, or solve for any colours, having previously discovered the actual colours from examining the experimental pairs, or some common pattern between shapes predicated on some generic criteria. 
 
-There is a limit to the combinations of these categories that 'make sense' to humans and theer are also limits to the search space and the number of actual permutations used in particular contexts. Finding these human centric patterns requires experimentation. 'Collections' of common transformations can also be grouped together then used as higher level transformations when appropriate, further reducing search space.
+There is a limit to the combinations of these categories that 'make sense' to humans and there are also limits to the search space and the number of actual permutations used in particular contexts. Finding these human centric patterns requires experimentation. 'Collections' of common transformations can also be grouped together then used as higher level transformations when appropriate, further reducing search space.
 
-There is a problem with the code submissions. There is good reason to believe that the submission file has some subtle bug. It was created in Rust and has no white space, there may be the expectation that the file should be produced using Python and the submission parsing relies on some quirk of the Python library. Alternatively generalisation did not work for the secret set, which may well be true but unlikely to account for the progress made with the evaluation set and lack thereof with the secret test set. More discussion in the full paper.
+There was a problem with code submissions. It is believed this is now solved. The problem was with the actual data being entered into the submission file. This should now be fixed but no submissions can now be done so this cannot be fully established.
 
 <u>Reference</u>
 

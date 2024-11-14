@@ -457,6 +457,19 @@ impl Examples {
         cats
     }
 
+    pub fn find_input_colours(&self) -> Vec<Colour> {
+        let mut common = Colour::all_colours();
+
+        for ex in self.examples.iter() {
+            let h = ex.input.grid.cell_colour_cnt_map();
+            let v: BTreeSet<Colour> = h.keys().map(|c| *c).collect();
+
+            common = common.intersection(&v).map(|c| *c).collect();
+        }
+
+        Vec::from_iter(common)
+    }
+
     pub fn find_output_colours(&self) -> Vec<Colour> {
         let mut common = Colour::all_colours();
 

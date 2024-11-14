@@ -113,6 +113,10 @@ impl Grid {
         true
     }
 
+    pub fn find_colour(&self, colour: Colour) -> Vec<Cell> {
+        self.cells.values().filter(|c| c.colour == colour).map(|c| c.clone()).collect()
+    }
+
     // TODO crap improve
     pub fn stretch_down(&self) -> Grid {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
