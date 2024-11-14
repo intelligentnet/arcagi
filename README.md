@@ -69,15 +69,3 @@ To compile the above for kaggle a docker image needs to be created and the .so
 file uploaded and referenced, somewhat tedious. It will run locally for public
 data test with cargo as normal. A release version should run in less that a
 second on most machines, this will change as more cases are completed.
-
-Currently there is a problem with the above, with kaggle scoring on the
-private dataset. Only run locally on public data for now or join the inet team.
-
-More investigation of the scoring on the secret test set was done, in addition
-to more training and evaluation examples succeeding. There is still a problem
-in that the score is always 1.00 regardless of what is done. Currently 47 
-evaluation tasks are correctly answered. The code being deterministic a binary
-chop over the top level rules can be done. If this is done over to distinct 
-halves then on both occasions 1.0 is scored, not 0.0 and 1.0 or vice versa
-as would be expected. Any halves! The submission file is correctly formatted (though lacks optional white space). A null run produces a score of 0.0 as would be expected. 
-So, very confused. 
