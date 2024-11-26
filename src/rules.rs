@@ -129,7 +129,7 @@ pub fn difference_shapes(exs: &Examples, coloured: bool) {
 
         for si in inp.shapes.iter() {
             for so in out.shapes.iter() {
-                if si.ox == so.ox && si.oy == so.oy {
+                if si.orow == so.orow && si.ocol == so.ocol {
                     if let Some(diff) = si.diff(so) {
                         println!("Same size");
                         diff.show_full();

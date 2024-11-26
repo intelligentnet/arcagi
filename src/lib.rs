@@ -1,3 +1,4 @@
+//pub mod queue;
 pub mod cats;
 pub mod data;
 pub mod examples;
@@ -5,9 +6,11 @@ pub mod cell;
 pub mod grid;
 pub mod shape;
 pub mod rules;
+//pub mod oldrules;
 pub mod experiments;
 pub mod runner;
 use crate::runner::runner;
+//pub mod summary;
 
 #[no_mangle]
 pub extern "C" fn arcagi(data_type: i32, all_int: i32) {

@@ -33,6 +33,19 @@ impl Example {
         Example { input, output, cat, pairs, coloured_pairs }
     }
 
+    pub fn new_cons(data: &IO) -> Self {
+        let input = QualifiedGrid::new_cons(&data.input);
+        let output = match &data.output {
+            Some(output) => QualifiedGrid::new_cons(output),
+            None => QualifiedGrid::trivial(),
+        };
+        let cat = Example::categorise_grid(&input, &output);
+        let pairs = Vec::new();
+        let coloured_pairs = Vec::new();
+
+        Example { input, output, cat, pairs, coloured_pairs }
+    }
+
     /*
     #[allow(clippy::nonminimal_bool)]
     pub fn bool_op(&self, op: BoolOp) -> Option<Grid> {
@@ -82,7 +95,6 @@ impl Example {
 
         if output.grid.size() == 0 {
             cats.insert(GridCategory::EmptyOutput);
-
             //return cats;
         }
 
@@ -238,6 +250,18 @@ impl Example {
         if input.grid.colour == output.grid.colour && input.grid.colour != Colour::Mixed {
             cats.insert(GridCategory::SameColour);
         }
+/*
+//eprintln!("{}", output.shapes.len());
+//output.shapes.show();
+        if output.shapes.len() > 0 && output.shapes.len() % 5 == 0 {
+            let h = output.shapes.colour_cnt();
+eprintln!("{h:?} {}", h.iter().filter(|(_,&v)| v == 1 || v == 4).count());
+            if h.len() == 2 && h.iter().filter(|(_,&v)| v == 1 || v == 4).count() == 2 {
+eprintln!("here");
+                cats.insert(GridCategory::SurroundOut);
+            }; 
+        }
+*/
         if input.shapes.len() == 1 {
             cats.insert(GridCategory::SingleShapeIn);
         } else if input.coloured_shapes.len() == 1 {
@@ -331,12 +355,6 @@ impl Example {
         if in_dim.0 * 2 == out_dim.0 && in_dim.1 * 2 == out_dim.1 {
             cats.insert(GridCategory::Double);
         }
-        if in_dim.0 == 3 && in_dim.1 == 7 {
-            cats.insert(GridCategory::In3x7);
-        }
-        if in_dim.0 == 7 && in_dim.1 == 3 {
-            cats.insert(GridCategory::In7x3);
-        }
         if input.shapes.shapes.len() == output.shapes.shapes.len() {
             cats.insert(GridCategory::InOutShapeCount);
         }
@@ -365,6 +383,67 @@ impl Example {
             if inp == outp {
                 cats.insert(GridCategory::IdenticalNoPixels);
             }
+        }
+        if output.grid.is_diag_origin() {
+            cats.insert(GridCategory::DiagonalOutOrigin);
+        } else if output.grid.is_diag_not_origin() {
+            cats.insert(GridCategory::DiagonalOutNotOrigin);
+        }
+        if input.grid.colour == Colour::Mixed {
+            cats.insert(GridCategory::NoColouredShapesIn(input.coloured_shapes.len()));
+        }
+        if output.grid.colour == Colour::Mixed {
+            cats.insert(GridCategory::NoColouredShapesOut(output.coloured_shapes.len()));
+        }
+        if input.shapes.overlay_shapes_same_colour() {
+            cats.insert(GridCategory::OverlayInSame);
+        }
+        if output.shapes.overlay_shapes_same_colour() {
+            cats.insert(GridCategory::OverlayOutSame);
+        }
+        if input.shapes.overlay_shapes_diff_colour() {
+            cats.insert(GridCategory::OverlayInDiff);
+        }
+        if output.shapes.overlay_shapes_diff_colour() {
+            cats.insert(GridCategory::OverlayOutDiff);
+        }
+        cats.insert(GridCategory::NoShapesIn(input.shapes.len()));
+        cats.insert(GridCategory::NoShapesOut(output.shapes.len()));
+        if input.shapes.is_square_same() {
+            cats.insert(GridCategory::SquareShapeSide(input.shapes.shapes[0].cells.rows));
+            cats.insert(GridCategory::SquareShapeSize(input.shapes.shapes[0].size()));
+        }
+        let mut cc = input.shapes.colour_cnt();
+        if cc.len() == 2 {
+            let first = if let Some(first) = cc.pop_first() {
+                first.1
+            } else {
+                0
+            };
+            let second = if let Some(second) = cc.pop_first() {
+                second.1
+            } else {
+                0
+            };
+
+            cats.insert(GridCategory::ShapeMinCntIn(first.min(second)));
+            cats.insert(GridCategory::ShapeMaxCntIn(first.max(second)));
+        }
+        let mut cc = output.shapes.colour_cnt();
+        if cc.len() == 2 {
+            let first = if let Some(first) = cc.pop_first() {
+                first.1
+            } else {
+                0
+            };
+            let second = if let Some(second) = cc.pop_first() {
+                second.1
+            } else {
+                0
+            };
+
+            cats.insert(GridCategory::ShapeMinCntOut(first.min(second)));
+            cats.insert(GridCategory::ShapeMaxCntOut(first.max(second)));
         }
 
         cats
@@ -409,6 +488,20 @@ impl Examples {
         Examples { examples, tests, cat }
     }
 
+    pub fn new_cons(data: &Data) -> Self {
+        let mut examples: Vec<Example> = data.train.iter()
+            .map(Example::new_cons)
+            .collect();
+
+        let tests: Vec<Example> = data.test.iter()
+            .map(Example::new_cons)
+            .collect();
+
+        let cat = Self::categorise_grids(&mut examples);
+
+        Examples { examples, tests, cat }
+    }
+
     pub fn match_shapes(&self) -> BTreeMap<Shape, Shape> {
         let mut mapping: BTreeMap<Shape, Shape> = BTreeMap::new();
 
@@ -427,20 +520,33 @@ impl Examples {
 
     pub fn categorise_grids(examples: &mut [Example]) -> BTreeSet<GridCategory> {
         let mut cats: BTreeSet<GridCategory> = BTreeSet::new();
+        let mut extra: BTreeSet<GridCategory> = BTreeSet::new();
 
         for ex in examples.iter_mut() {
-            let mut cat = Example::categorise_grid(&ex.input, &ex.output);
+            let cat = Example::categorise_grid(&ex.input, &ex.output);
 
             if cat.contains(&GridCategory::InOutSquareSameSize) {
-                cat.insert(GridCategory::InOutSameSize);
+                extra.insert(GridCategory::InOutSameSize);
+            }
+            if cat.contains(&GridCategory::OverlayInSame) {
+                extra.insert(GridCategory::OverlayInSame);
+            }
+            if cat.contains(&GridCategory::OverlayOutSame) {
+                extra.insert(GridCategory::OverlayOutSame);
+            }
+            if cat.contains(&GridCategory::OverlayInDiff) {
+                extra.insert(GridCategory::OverlayInDiff);
+            }
+            if cat.contains(&GridCategory::OverlayOutDiff) {
+                extra.insert(GridCategory::OverlayOutDiff);
             }
             ex.pairs = ex.input.shapes.pair_shapes(&ex.output.shapes, true);
             if !ex.pairs.is_empty() {
-                cat.insert(GridCategory::InOutSameShapes);
+                extra.insert(GridCategory::InOutSameShapes);
             }
             ex.coloured_pairs = ex.input.coloured_shapes.pair_shapes(&ex.output.coloured_shapes, true);
             if !ex.coloured_pairs.is_empty() {
-                cat.insert(GridCategory::InOutSameShapesColoured);
+                extra.insert(GridCategory::InOutSameShapesColoured);
             }
 
             if cats.is_empty() {
@@ -453,6 +559,8 @@ impl Examples {
         if cats.contains(&GridCategory::InOutSquareSameSize) && cats.contains(&GridCategory::InOutSameSize) {
             cats.remove(&GridCategory::InOutSameSize);
         }
+
+        cats = cats.union(&extra).cloned().collect();
 
         cats
     }

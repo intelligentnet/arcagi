@@ -319,6 +319,8 @@ pub enum GridCategory {
     BorderRightOut,
     BorderTopIn,
     BorderTopOut,
+    DiagonalOutOrigin,
+    DiagonalOutNotOrigin,
     Div9In,
     Div9Out,
     Double,
@@ -337,8 +339,6 @@ pub enum GridCategory {
     IdenticalColours,
     IdenticalNoColours,
     IdenticalNoPixels,
-    In3x7,
-    In7x3,
     InEmpty,
     InLessCountOut,
     InLessCountOutColoured,
@@ -369,15 +369,29 @@ pub enum GridCategory {
     MirrorXOut,
     MirrorYIn,
     MirrorYOut,
+    NoColoursIn(usize),
+    NoColoursOut(usize),
+    NoColouredShapesIn(usize),
+    NoColouredShapesOut(usize),
+    NoShapesIn(usize),
+    NoShapesOut(usize),
     OutLessCountIn,
     OutLessCountInColoured,
     OutLessThanIn,
     OutSameSize,
     OutSquare,
+    OverlayInSame,
+    OverlayOutSame,
+    OverlayInDiff,
+    OverlayOutDiff,
     Rot180,
     Rot270,
     Rot90,
     SameColour,
+    ShapeMaxCntIn(usize),
+    ShapeMaxCntOut(usize),
+    ShapeMinCntIn(usize),
+    ShapeMinCntOut(usize),
     SingleColouredShapeIn,
     SingleColouredShapeOut,
     SingleColourIn,
@@ -385,12 +399,59 @@ pub enum GridCategory {
     SinglePixelOut,
     SingleShapeIn,
     SingleShapeOut,
+    SquareShapeSide(usize),
+    SquareShapeSize(usize),
+    SurroundOut,
     SymmetricIn,
     SymmetricOut,
     Transpose,
 //    GridToSize,
 //    GridCalculated,
 //    Shapes,
+}
+
+impl GridCategory {
+    pub fn equal(&self, other: &Self) -> bool {
+        self.same(other) && self.get_para() == other.get_para()
+    }
+
+    pub fn lt(&self, other: &Self) -> bool {
+        self.same(other) && self.get_para() < other.get_para()
+    }
+
+    pub fn gt(&self, other: &Self) -> bool {
+        self.same(other) && self.get_para() > other.get_para()
+    }
+
+    pub fn lte(&self, other: &Self) -> bool {
+        self.same(other) && self.get_para() <= other.get_para()
+    }
+
+    pub fn gte(&self, other: &Self) -> bool {
+        self.same(other) && self.get_para() >= other.get_para()
+    }
+
+    fn get_para(&self) -> usize {
+        match self {
+            GridCategory::NoColouredShapesIn(i) => *i,
+            GridCategory::NoColouredShapesOut(i) => *i,
+            GridCategory::NoColoursIn(i) => *i,
+            GridCategory::NoColoursOut(i) => *i,
+            GridCategory::NoShapesIn(i) => *i,
+            GridCategory::NoShapesOut(i) => *i,
+            GridCategory::ShapeMaxCntIn(i) => *i,
+            GridCategory::ShapeMaxCntOut(i) => *i,
+            GridCategory::ShapeMinCntIn(i) => *i,
+            GridCategory::ShapeMinCntOut(i) => *i,
+            GridCategory::SquareShapeSide(i) => *i,
+            GridCategory::SquareShapeSize(i) => *i,
+            _ => usize::MAX
+        }
+    }
+
+    pub fn same(&self, other: &Self) -> bool {
+        core::mem::discriminant(self) == core::mem::discriminant(other)
+    }
 }
 
 #[repr(usize)]

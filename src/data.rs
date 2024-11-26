@@ -88,7 +88,7 @@ pub fn load_files(data: &str) -> BTreeMap<String, Data> {
     } else {
         "/kaggle/working/arc-agi"
     };
-eprintln!("#### {prefix}");
+//eprintln!("#### {prefix}");
     let training_suffix = "challenges.json";
     let solution_suffix = "solutions.json";
     let training = format!("{}_{}_{}", prefix, data, training_suffix);
