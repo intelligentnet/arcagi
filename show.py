@@ -7,7 +7,8 @@ import os
 from pathlib import Path
 from glob import glob
 
-base_path='/kaggle/input/arc-prize-2024/'
+#base_path='/kaggle/input/arc-prize-2024/'
+base_path='input/arc-prize-2024/'
 
 # Loading JSON data
 def load_json(file_path):
