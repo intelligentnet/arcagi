@@ -683,12 +683,12 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     pub fn flood_fill(&self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
         let mut grid = self.clone();
 
-        grid.flood_fill_in_situ(x, y, ignore_colour, new_colour);
+        grid.flood_fill_mut(x, y, ignore_colour, new_colour);
 
         grid
     }
 
-    pub fn flood_fill_in_situ(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
+    pub fn flood_fill_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
         let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == Colour::Black || self.cells[i].colour == ignore_colour);
 
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour);
@@ -703,7 +703,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
             .collect();
 
         coloured.iter()
-            .for_each(|(x, y)| grid.flood_fill_in_situ(*x, *y, ignore_colour, new_colour));
+            .for_each(|(x, y)| grid.flood_fill_mut(*x, *y, ignore_colour, new_colour));
 
         grid
     }

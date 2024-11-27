@@ -218,15 +218,19 @@ impl Colour {
         }
     }
 
-    pub fn to_base(self) -> Colour {
+    pub fn to_base(self) -> Self {
         Self::from_usize(Self::to_usize(self) % 10)
+    }
+
+    pub fn to_base_sub(self, colour: Self) -> Self {
+        Self::from_usize(Self::to_usize(self) - Self::to_usize(colour))
     }
 
     pub fn is_colour(self) -> bool {
         self == Self::Same || Self::to_usize(self) < 100
     }
 
-    pub fn colours() -> Vec<Colour> {
+    pub fn colours() -> Vec<Self> {
         (1..=9).map(Self::from_usize).collect()
     }
 
@@ -254,7 +258,7 @@ impl Colour {
         *self > Self::OrigBlack && *self <= Self::OrigBrown
     }
 
-    pub fn single_colour_vec(v: &[Colour]) -> bool {
+    pub fn single_colour_vec(v: &[Self]) -> bool {
         if v.is_empty() {
             return false;
         }
@@ -270,7 +274,7 @@ impl Colour {
         true
     }
 
-    pub fn all_colours() -> BTreeSet<Colour> {
+    pub fn all_colours() -> BTreeSet<Self> {
         (0 ..= 9).map(|c| Colour::from_usize(c)).collect()
     }
 }

@@ -81,8 +81,8 @@ pub fn dir(dir: &str) -> Vec<String> {
 }
 
 pub fn load_files(data: &str) -> BTreeMap<String, Data> {
-    let prefix = if std::path::Path::new("../input/arc-prize-2024").is_dir() {
-        "../input/arc-prize-2024/arc-agi"
+    let prefix = if std::path::Path::new("input/arc-prize-2024").is_dir() {
+        "input/arc-prize-2024/arc-agi"
     } else if std::path::Path::new("kaggle/working").is_dir() {
         "kaggle/working/arc-agi"
     } else {

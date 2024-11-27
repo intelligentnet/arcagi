@@ -310,9 +310,9 @@ fn pass(catfile: &str, all: bool, tdata: &BTreeMap<String, Data>, is_test: bool,
                             return Grid::trivial();
                         }
                         if s.orow <= 2 || s.ocol <= 2 || s.orow >= grid.cells.rows - side - 2 || s.ocol >= grid.cells.columns - side - 2 {
-                            grid.flood_fill_in_situ(s.orow, s.ocol, Colour::NoColour, border);
+                            grid.flood_fill_mut(s.orow, s.ocol, Colour::NoColour, border);
                         } else {
-                            grid.flood_fill_in_situ(s.orow, s.ocol, Colour::NoColour, *inner);
+                            grid.flood_fill_mut(s.orow, s.ocol, Colour::NoColour, *inner);
                         }
                     }
 //grid.show();
@@ -1121,7 +1121,7 @@ fn pass(catfile: &str, all: bool, tdata: &BTreeMap<String, Data>, is_test: bool,
                         if let Some(colour) = ssm.get(&s.size()) {
                             let (x, y) = s.centre_of();
 
-                            s.flood_fill_in_situ(x - s.orow, y - s.ocol, Colour::NoColour, *colour);
+                            s.flood_fill_mut(x - s.orow, y - s.ocol, Colour::NoColour, *colour);
                         }
                     }
 
@@ -1470,7 +1470,7 @@ fn pass(catfile: &str, all: bool, tdata: &BTreeMap<String, Data>, is_test: bool,
                         if let Some(colour) = ssm.get(&s.size()) {
                             let (x, y) = s.centre_of();
 
-                            s.flood_fill_in_situ(x - s.orow, y - s.ocol, Colour::NoColour, *colour);
+                            s.flood_fill_mut(x - s.orow, y - s.ocol, Colour::NoColour, *colour);
                         }
                     }
 
@@ -1821,6 +1821,110 @@ grid.show();
             };
 
             if run_experiment(&file, 621, is_test, &examples, &targets, done, tries, &func, output) { continue; };
+
+            if cat.contains(&GridCategory::NoShapesIn(1)) && cat.contains(&GridCategory::NoShapesOut(2)) {
+                let extra_colour = examples.examples[0].output.grid.find_min_colour();
+
+                let func = |ex: &Example| {
+                    if ex.input.shapes.shapes.is_empty() || !ex.input.grid.is_square() {
+                        return Grid::trivial();
+                    }
+                    let colour = ex.input.grid.colour;
+                    let mut shapes = ex.input.shapes.clone();
+                    let shape = &ex.input.shapes.shapes[0];
+                    let shape = shape.to_square();
+                    let mut shape = shape.diff(&shape.rotated_90()).unwrap();
+
+                    shape.recolour_mut(Colour::ToBlack + colour, extra_colour);
+                    shape.uncolour_mut();
+
+                    shapes.shapes.push(shape);
+//shapes.to_grid().show();
+                    
+                    shapes.to_grid()
+                };
+
+                if run_experiment(&file, 622, is_test, &examples, &targets, done, tries, &func, output) { continue; };
+            }
+
+            if cat.contains(&GridCategory::NoShapesIn(1)) && cat.contains(&GridCategory::NoColouredShapesOut(1)) {
+                let extra_colour = examples.examples[0].output.grid.find_min_colour();
+
+                let func = |ex: &Example| {
+                    if ex.input.shapes.shapes.is_empty() {
+                        return Grid::trivial();
+                    }
+                    let mut shapes = ex.input.shapes.clone();
+
+                    shapes.shapes[0].recolour_mut(Colour::Black, extra_colour);
+//shapes.to_grid().show();
+                    
+                    shapes.to_grid()
+                };
+
+                if run_experiment(&file, 623, is_test, &examples, &targets, done, tries, &func, output) { continue; };
+
+                let func = |ex: &Example| {
+                    if ex.input.shapes.shapes.is_empty() && ex.input.shapes.shapes[0].cells.columns % 2 != 1 {
+                        return Grid::trivial();
+                    }
+
+                    let mut shape = ex.input.shapes.shapes[0].clone();
+                    let mid_r = shape.cells.rows / 2;
+                    let cols: Vec<usize> = (0 .. shape.cells.columns).filter(|&c| shape.cells[(mid_r, c)].colour == Colour::Black).collect();
+
+                    if cols.is_empty() {
+                        return Grid::trivial();
+                    }
+
+                    let mut down = true;
+
+                    for (i, &c) in cols.iter().enumerate() {
+                        if i % 3 == 0 {
+                            shape.flood_fill_mut(mid_r, c, Colour::NoColour, extra_colour);
+                            down = !down;
+                        }
+                    }
+
+                    if cols.len() % 3 == 0 {
+                        let r = if down { mid_r + 1 } else { mid_r - 1 };
+                        let c = shape.cells.columns - 1;
+
+                        shape.flood_fill_mut(r, c, Colour::NoColour, extra_colour);
+                    }
+
+//shape.show();
+                    shape.to_grid()
+                };
+
+                if run_experiment(&file, 623, is_test, &examples, &targets, done, tries, &func, output) { continue; };
+
+                let func = |ex: &Example| {
+                    if ex.input.shapes.shapes.is_empty() && ex.input.shapes.shapes[0].cells.columns % 2 != 1 {
+                        return Grid::trivial();
+                    }
+
+                    let mut shape = ex.input.grid.as_shape();
+                    let rows = shape.cells.rows;
+                    let cols = shape.cells.columns;
+
+                    for r in 0 .. rows {
+                        for c in 0 .. cols {
+                            if (r == 0 || c == 0 || r == rows - 1 || c == cols - 1) && shape.cells[(r, c)].colour == Colour::Black {
+                                shape.flood_fill_mut(r, c, Colour::NoColour, Colour::Green);
+                            }
+                        }
+                    }
+
+                    shape.recolour_mut(Colour::Black, Colour::Red);
+
+//shape.show();
+                    shape.to_grid()
+                };
+
+                if run_experiment(&file, 624, is_test, &examples, &targets, done, tries, &func, output) { continue; };
+            }
+eprintln!("{file}");
 
             /*
             eprintln!("{file} yes 4");

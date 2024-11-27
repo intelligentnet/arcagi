@@ -227,6 +227,10 @@ impl Shape {
         true
     }
 
+    pub fn corners(&self) -> (usize, usize, usize, usize) {
+        (self.orow, self.ocol, self.orow + self.cells.rows - 1, self.ocol + self.cells.columns - 1)
+    }
+
     pub fn same_patch(&self, other: &Self) -> bool {
         if self.size() != other.size() || self.cells.rows != other.cells.rows {
             return false;
@@ -409,7 +413,7 @@ impl Shape {
 
         for ((x, y), c) in self.cells.items() {
             if c.colour == Colour::Black && (x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1) {
-                shape.flood_fill_in_situ(x, y, Colour::NoColour, self.colour);
+                shape.flood_fill_mut(x, y, Colour::NoColour, self.colour);
             }
         }
 
@@ -419,12 +423,12 @@ impl Shape {
     pub fn flood_fill(&self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
         let mut shape = self.clone();
 
-        shape.flood_fill_in_situ(x, y, ignore_colour, new_colour);
+        shape.flood_fill_mut(x, y, ignore_colour, new_colour);
 
         shape
     }
 
-    pub fn flood_fill_in_situ(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
+    pub fn flood_fill_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
         let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == Colour::Black || self.cells[i].colour == ignore_colour);
 
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour);
@@ -735,6 +739,141 @@ impl Shape {
         ans
     }
 
+    /*
+    pub fn make_square(&self) -> Self {
+        // Figure must also be a square
+        let brr_tlr = brr - tlr;
+        let brc_tlc = brc - tlc;
+        let mut tb = true;  // top/bottom equal extent?
+        if brr_tlr > brc_tlc {
+            let tl = tlr.min(tlc);
+
+            if tl == tlr {
+                tlc = tl;
+            } else {
+                tlr = tl;
+            }
+        } else if brr_tlr < brc_tlc {
+            let br = brr.max(tlc);
+
+            if br == brr {
+                brc = br;
+            } else {
+                brr = br;
+            }
+        }
+    }
+    */
+
+    pub fn origin_centre(&self) -> (usize, usize, usize, usize) { 
+        let (tlr, tlc, _, _) = self.corners();
+        let side = self.cells.rows.max(self.cells.columns);
+
+        (tlr.min(tlc), tlr.min(tlc), side, if side % 2 == 1 { 1 } else { 4 })
+    }
+
+    pub fn larger(&self, other: &Self) -> Self {
+        if self.size() >= other.size() {
+            self.clone()
+        } else {
+            other.clone()
+        }
+    }
+
+    pub fn smaller(&self, other: &Self) -> Self {
+        if self.size() <= other.size() {
+            self.clone()
+        } else {
+            other.clone()
+        }
+    }
+
+    pub fn to_square(&self) -> Self {
+        let (or, oc, side, _) = self.origin_centre();
+        let shape = Shape::new_sized_coloured_position(or, oc, side, side, Colour::Black);
+
+        Shapes::new_shapes(&[shape, self.clone()]).to_shape()
+    }
+
+    pub fn to_square_grid(&self) -> Grid {
+        let (or, oc, side, _) = self.origin_centre();
+        let shape = Shape::new_sized_coloured_position(or, oc, side, side, Colour::Black);
+
+        Shapes::new_shapes(&[shape, self.clone()]).to_grid()
+    }
+
+    /* not necessary
+    // must be square and assme 3 out of four shapes + centre already
+    pub fn symmetric_slice(&self) -> (Self, Self) {
+        let mut shape = self.clone();
+        let mut centre = self.clone();
+        let mut arm = self.clone();
+
+        let (mut tlr, mut tlc, mut brr, mut brc) = shape.corners();
+shape.show();
+
+        // Rotate to minimise origin
+        for i in 1 .. 4 {
+            let rs = shape.rot_90(i);
+rs.show();
+            let (a, b, c, d) = rs.corners();
+
+            if a < tlr || b < tlc || c < brr || d < brc {
+                tlr = a;
+                tlc = b;
+                brr = c;
+                brc = d;
+
+                shape = rs;
+            }
+        }
+println!("-- {tlr}, {tlc}, {brr}, {brc}");
+
+        let (mut tlr, mut tlc, mut brr, mut brc) = shape.corners();
+
+println!(">> {tlr}, {tlc}, {brr}, {brc}");
+        // Figure must also be a square
+        let brr_tlr = brr - tlr;
+        let brc_tlc = brc - tlc;
+        let mut tb = true;  // top/bottom equal extent?
+        if brr_tlr > brc_tlc {
+            let tl = tlr.min(tlc);
+
+            if tl == tlr {
+                tlc = tl;
+            } else {
+                tlr = tl;
+            }
+        } else if brr_tlr < brc_tlc {
+            let br = brr.max(tlc);
+
+            if br == brr {
+                brc = br;
+            } else {
+                brr = br;
+            }
+        }
+
+        // if square side is odd then centre is pixel else size 4
+        let side = brr_tlr.max(brc_tlc) + 1;
+
+        if side % 2 == 1 {
+            let r = side / 2;
+            let c = side / 2;
+
+            centre = self.subshape(r - tlr, 1, c - tlc, 1);
+        } else {
+            let r = side / 2 - 1;
+            let c = side / 2 - 1;
+
+            centre = self.subshape(r - tlr, 2, c - tlc, 2);
+        }
+println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
+
+        (centre, arm)
+    }
+    */
+
     pub fn distance_x(&self, other: &Self) -> f32 {
         let tl_dist = self.orow.max(other.orow) - other.orow.min(self.orow);
         let br_dist = self.cells.columns.max(other.cells.columns) - other.cells.columns.min(self.cells.columns);
@@ -862,11 +1001,15 @@ impl Shape {
         true
     }
 
-    pub fn rotated_90(&self) -> Self {
+    fn rot_90(&self, n: usize) -> Self {
         if !self.is_square() {
             return self.clone();
         }
-        let mut m = self.cells.rotated_cw(1);
+        let mut m = if n < 3 {
+            self.cells.rotated_cw(n)
+        } else {
+            self.cells.rotated_ccw(1)
+        };
 
         for (x, y) in self.cells.keys() {
             m[(x, y)].row = x + self.orow;
@@ -874,34 +1017,18 @@ impl Shape {
         }
         
         Self::new(self.orow, self.ocol, &m)
+    }
+
+    pub fn rotated_90(&self) -> Self {
+        self.rot_90(1)
     }
 
     pub fn rotated_180(&self) -> Self {
-        if !self.is_square() {
-            return self.clone();
-        }
-        let mut m = self.cells.rotated_cw(2);
-
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x + self.orow;
-            m[(x, y)].col = y + self.ocol;
-        }
-        
-        Self::new(self.orow, self.ocol, &m)
+        self.rot_90(2)
     }
 
     pub fn rotated_270(&self) -> Self {
-        if !self.is_square() {
-            return self.clone();
-        }
-        let mut m = self.cells.rotated_ccw(1);
-
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x + self.orow;
-            m[(x, y)].col = y + self.ocol;
-        }
-        
-        Self::new(self.orow, self.ocol, &m)
+        self.rot_90(3)
     }
 
     pub fn is_rotated_90(&self, other: &Self) -> bool {
@@ -1049,6 +1176,22 @@ impl Shape {
 
         for c in self.cells.values_mut() {
             c.colour = to;
+        }
+    }
+
+    pub fn uncolour(&self) -> Self {
+        let mut shape = self.clone();
+
+        for c in shape.cells.values_mut() {
+            c.colour = c.colour.to_base();
+        }
+
+        shape
+    }
+
+    pub fn uncolour_mut(&mut self) {
+        for c in self.cells.values_mut() {
+            c.colour = c.colour.to_base();
         }
     }
 
