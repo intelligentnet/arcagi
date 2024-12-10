@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use pathfinding::prelude::Matrix;
+use crate::cats::Colour::*;
+use crate::cats::Direction::*;
 use crate::cats::*;
 use crate::cell::*;
 use crate::grid::*;
@@ -71,7 +73,7 @@ impl Shape {
         let (colour, _) = Self::cell_colour_cnt(cells, true);
 //        let sid = Self::sid(cells, false);
 //println!("=== {:?} {} {}", col, cnt, cells.len());
-        //let colour = if cnt == cells.len() { col } else { Colour::Mixed };
+        //let colour = if cnt == cells.len() { col } else { Mixed };
         let mut new_cells = cells.clone();
 
         for (x, y) in cells.keys() {
@@ -94,35 +96,35 @@ impl Shape {
         let (colour, _) = Self::cell_colour_cnt(cells, true);
 //        let sid = Self::sid(cells, false);
 //println!("=== {:?} {} {}", col, cnt, cells.len());
-        //let colour = if cnt == cells.len() { col } else { Colour::Mixed };
+        //let colour = if cnt == cells.len() { col } else { Mixed };
         let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
         let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
         let cells = Self::cell_category(cells);
 
-        let ox = cells[(0,0)].row;
-        let oy = cells[(0,0)].col;
-        let mut res = Self { orow: ox, ocol: oy, colour, cells, cats, io_edges };
+        let orow = cells[(0,0)].row;
+        let ocol = cells[(0,0)].col;
+        let mut res = Self { orow, ocol, colour, cells, cats, io_edges };
 
         res.categorise_shape();
 
         res
     }
 
-    pub fn new_sized_coloured(x: usize, y: usize, colour: Colour) -> Self {
-        let cells: Matrix<Cell> = Matrix::from_fn(x, y, |(x, y)| Cell::new_colour(x, y, colour));
+    pub fn new_sized_coloured(rows: usize, cols: usize, colour: Colour) -> Self {
+        let cells: Matrix<Cell> = Matrix::from_fn(rows, cols, |(rows, cols)| Cell::new_colour(rows, cols, colour));
         let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
         let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
 
         Self { orow: 0, ocol: 0, colour, cells, cats, io_edges }
     }
 
-    pub fn new_sized_coloured_position(ox: usize, oy: usize, x: usize, y: usize, colour: Colour) -> Self {
-        let cells: Matrix<Cell> = Matrix::from_fn(x, y, |(x, y)| Cell::new_colour(x + ox, y + oy, colour));
+    pub fn new_sized_coloured_position(orow: usize, ocol: usize, row: usize, col: usize, colour: Colour) -> Self {
+        let cells: Matrix<Cell> = Matrix::from_fn(row, col, |(r, c)| Cell::new_colour(r + orow, c + ocol, colour));
 
         let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
         let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
 
-        Self { orow: ox, ocol: oy, colour, cells, cats, io_edges }
+        Self { orow, ocol, colour, cells, cats, io_edges }
     }
 
     pub fn new_empty() -> Self {
@@ -130,13 +132,13 @@ impl Shape {
         let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
         let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
 
-        Self { orow: 0, ocol: 0, colour: Colour::NoColour, cells, cats, io_edges }
+        Self { orow: 0, ocol: 0, colour: NoColour, cells, cats, io_edges }
     }
 
+/*
     pub fn new9(&self, corners: bool, colour: Colour) -> Self {
         let mut s = if self.orow == 0 && self.ocol == 0 {
-            let mut s = Self::new_sized_coloured(2, 2, Colour::Transparent);
-
+            let mut s = Self::new_sized_coloured(2, 2, Transparent);
             s.cells[(0,0)].colour = self.colour;
 
             if corners {
@@ -148,7 +150,7 @@ impl Shape {
 
             s
         } else if self.orow > 0 && self.ocol == 0 {
-            let mut s = Self::new_sized_coloured(3, 2, Colour::Transparent);
+            let mut s = Self::new_sized_coloured(3, 2, Transparent);
 
             s.cells[(1,0)].colour = self.colour;
 
@@ -162,7 +164,7 @@ impl Shape {
 
             s
         } else if self.orow == 0 && self.ocol > 0 {
-            let mut s = Self::new_sized_coloured(2, 3, Colour::Transparent);
+            let mut s = Self::new_sized_coloured(2, 3, Transparent);
 
             s.cells[(0,1)].colour = self.colour;
 
@@ -176,7 +178,7 @@ impl Shape {
 
             s
         } else {
-            let mut s = Self::new_sized_coloured(3, 3, Colour::Transparent);
+            let mut s = Self::new_sized_coloured(3, 3, Transparent);
 
             s.cells[(1,1)].colour = self.colour;
 
@@ -198,7 +200,7 @@ impl Shape {
         s.orow = if self.orow > 0 { self.orow - 1 } else { self.orow };
         s.ocol = if self.ocol > 0 { self.ocol - 1 } else { self.ocol };
 
-        s.colour = Colour::Mixed;
+        s.colour = Mixed;
 
         for x in 0 .. s.cells.rows {
             for y in 0 .. s.cells.columns {
@@ -209,17 +211,21 @@ impl Shape {
 
         s
     }
+*/
 
     pub fn trivial() -> Self {
         Self::new_empty()
     }
 
-    pub fn full(&self) -> bool {
-        if self.cells.rows == 0 {
-            return false;
-        }
+    /*
+    pub fn shape_from_reachable(&self, reachable: BTreeSet<(usize, usize)>) -> Self {
+        reachable.iter().for_each(|&i| self.cells[i].colour = new_colour)
+    }
+    */
+
+    pub fn is_full(&self) -> bool {
         for c in self.cells.values() {
-            if c.colour == Colour::Black {
+            if c.colour == Black {
                 return false;
             }
         }
@@ -237,7 +243,7 @@ impl Shape {
         }
 
         for (xy, c) in self.cells.items() {
-            if c.colour != Colour::Black && c.colour != other.cells[xy].colour {
+            if c.colour != Black && c.colour != other.cells[xy].colour {
                 return false;
             }
         }
@@ -253,7 +259,7 @@ impl Shape {
         let mut shape = self.clone();
 
         for xy in self.cells.keys() {
-            if self.cells[xy].colour == Colour::Black {
+            if self.cells[xy].colour == Black {
                 shape.cells[xy].colour = other.cells[xy].colour;
             }
         }
@@ -272,7 +278,7 @@ impl Shape {
 
     // must be odd size
     pub fn new_square(x: usize, y: usize, size: usize, colour: Colour) -> Self {
-        let mut square = Self::new_sized_coloured(size, size, Colour::Black);
+        let mut square = Self::new_sized_coloured(size, size, Black);
 
         square.colour = colour;
 
@@ -286,13 +292,13 @@ impl Shape {
     }
 
     pub fn is_trivial(&self) -> bool {
-        self.cells.rows == 0 && self.cells.columns == 0 && self.colour == Colour::Black
+        self.cells.rows == 0 && self.cells.columns == 0 && self.colour == Black
     }
 
     pub fn remove(&mut self, c: &Cell) {
         let mut c = c.clone();
 
-        c.colour = Colour::Black;
+        c.colour = Black;
 
         self.cells[(c.row, c.col)] = c.clone();
     }
@@ -315,8 +321,12 @@ impl Shape {
         inner_shapes
     }
 
-    pub fn shrink(&self) -> Self {
-        let mut s = self.to_grid().to_shapes().shapes[0].clone();
+    pub fn shrink_any(&self, coloured: bool) -> Self {
+        let mut s = if coloured {
+            self.to_grid().to_shapes_coloured().shapes[0].clone()
+        } else {
+            self.to_grid().to_shapes().shapes[0].clone()
+        };
 
         s.orow = self.orow;
         s.ocol = self.ocol;
@@ -331,20 +341,12 @@ impl Shape {
         s
     }
 
+    pub fn shrink(&self) -> Self {
+        self.shrink_any(false)
+    }
+
     pub fn shrink_coloured(&self) -> Self {
-        let mut s = self.to_grid().to_shapes_coloured().shapes[0].clone();
-
-        s.orow = self.orow;
-        s.ocol = self.ocol;
-
-        for x in 0 .. s.cells.rows {
-            for y in 0 .. s.cells.columns {
-                s.cells[(x,y)].row = s.orow + x;
-                s.cells[(x,y)].col = s.ocol + y;
-            }
-        }
-
-        s
+        self.shrink_any(true)
     }
 
     pub fn euclidian(&self) -> f64 {
@@ -404,16 +406,16 @@ impl Shape {
         self.cells.rows == 1 && self.cells.columns == 1
     }
 
-    pub fn fill_boudary_colour(&self) -> Self {
-        if self.colour == Colour::Mixed {
+    pub fn fill_boundary_colour(&self) -> Self {
+        if self.colour == Mixed {
             return self.clone();
         }
 
         let mut shape = self.clone();
 
         for ((x, y), c) in self.cells.items() {
-            if c.colour == Colour::Black && (x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1) {
-                shape.flood_fill_mut(x, y, Colour::NoColour, self.colour);
+            if c.colour == Black && (x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1) {
+                shape.flood_fill_mut(x, y, NoColour, self.colour);
             }
         }
 
@@ -429,7 +431,7 @@ impl Shape {
     }
 
     pub fn flood_fill_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
-        let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == Colour::Black || self.cells[i].colour == ignore_colour);
+        let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == Black || self.cells[i].colour == ignore_colour);
 
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour);
     }
@@ -439,12 +441,12 @@ impl Shape {
         let mut digest = crc.digest();
 
         for ((x, y), c) in m.items() {
-            let colour = if c.colour == Colour::Black {
-                Colour::Black
+            let colour = if c.colour == Black {
+                Black
             } else if coloured {
                 c.colour
             } else {
-                Colour::Mixed 
+                Mixed 
             };
 
             digest.update(&x.to_ne_bytes());
@@ -474,16 +476,16 @@ impl Shape {
     // Same footprint + colours
     pub fn equals(&self, other: &Self) -> Colour {
         if !self.equal_footprint(other) {
-            return Colour::DiffShape;
+            return DiffShape;
         }
 
         for (c1, c2) in self.cells.values().zip(other.cells.values()) {
             if c1.colour != c2.colour {
-                return Colour::DiffBlack + c2.colour;
+                return DiffBlack + c2.colour;
             }
         }
 
-        Colour::Same
+        Same
     }
 
     // Same position
@@ -539,7 +541,7 @@ impl Shape {
 
     pub fn is_empty(&self) -> bool {
         for c in self.cells.values() {
-            if c.colour != Colour::Black {
+            if c.colour != Black {
                 return false
             }
         }
@@ -645,7 +647,7 @@ impl Shape {
 
     pub fn pixels(&self) -> usize {
         self.cells.values()
-            .filter(|c| c.colour != Colour::Black).
+            .filter(|c| c.colour != Black).
             count()
     }
 
@@ -669,7 +671,7 @@ impl Shape {
         let mut s: BTreeSet<Colour> = BTreeSet::new();
 
         for c in self.cells.values() {
-            if c.colour != Colour::Black {
+            if c.colour != Black {
                 s.insert(c.colour);
             }
         }
@@ -681,7 +683,7 @@ impl Shape {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
 
         for c in self.cells.values() {
-            if c.colour != Colour::Black {
+            if c.colour != Black {
                 *h.entry(c.colour).or_insert(0) += 1;
             }
         }
@@ -693,7 +695,7 @@ impl Shape {
         let mut h: HashMap<usize, usize> = HashMap::new();
 
         for c in cells.values() {
-            if c.colour != Colour::Black {
+            if c.colour != Black {
                 *h.entry(Colour::to_usize(c.colour)).or_insert(0) += 1;
             }
         }
@@ -706,7 +708,7 @@ impl Shape {
             .map(|(col, cnt)| (Colour::from_usize(*col), *cnt));
 
         match pair {
-            None => (Colour::NoColour, 0),
+            None => (NoColour, 0),
             Some((colour, cnt)) => (colour, cnt)
         }
     }
@@ -790,14 +792,14 @@ impl Shape {
 
     pub fn to_square(&self) -> Self {
         let (or, oc, side, _) = self.origin_centre();
-        let shape = Shape::new_sized_coloured_position(or, oc, side, side, Colour::Black);
+        let shape = Shape::new_sized_coloured_position(or, oc, side, side, Black);
 
         Shapes::new_shapes(&[shape, self.clone()]).to_shape()
     }
 
     pub fn to_square_grid(&self) -> Grid {
         let (or, oc, side, _) = self.origin_centre();
-        let shape = Shape::new_sized_coloured_position(or, oc, side, side, Colour::Black);
+        let shape = Shape::new_sized_coloured_position(or, oc, side, side, Black);
 
         Shapes::new_shapes(&[shape, self.clone()]).to_grid()
     }
@@ -1127,7 +1129,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         let mut s = self.clone();
 
         for c in s.cells.values_mut() {
-            if c.colour != Colour::Black {
+            if c.colour != Black {
                 c.colour = Colour::to_base(c.colour);
             }
         }
@@ -1141,7 +1143,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         shape.colour = to;
 
         for c in shape.cells.values_mut() {
-            if c.colour == from || from == Colour::NoColour {
+            if c.colour == from || from == NoColour {
                 c.colour = to;
             }
         }
@@ -1153,7 +1155,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         self.colour = to;
 
         for c in self.cells.values_mut() {
-            if c.colour == from || from == Colour::NoColour {
+            if c.colour == from || from == NoColour {
                 c.colour = to;
             }
         }
@@ -1195,6 +1197,10 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         }
     }
 
+    pub fn is_line(&self) -> bool {
+        self.cells.rows == 1 && self.cells.columns > 0 || self.cells.rows > 1 && self.cells.columns == 1 
+    }
+
     pub fn is_square(&self) -> bool {
         self.cells.rows == self.cells.columns
     }
@@ -1218,7 +1224,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         self.colour = to;
 
         for c in self.cells.values_mut() {
-            if c.colour == from || from == Colour::NoColour {
+            if c.colour == from || from == NoColour {
                 c.colour = to;
             }
         }
@@ -1236,7 +1242,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         let mut shape = self.clone();
 
         for (x, y) in self.cells.keys() {
-            if self.cells[(x, y)].colour == Colour::Black {
+            if self.cells[(x, y)].colour == Black {
                 shape.cells[(x, y)].colour = to;
             }
         }
@@ -1263,7 +1269,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
 
     /*
     pub fn scale_up_divider(&self, factor: usize, border: bool, divider: Colour) -> Shape {
-        let resize = divider != Colour::NoColour;
+        let resize = divider != NoColour;
         let size = if resize { factor + 1 } else { factor };
         let div = if !resize { 0 } else { factor - 1 };
         let mut cells = Matrix::new(self.cells.rows * factor + div, self.cells.columns * factor + div, Cell::new(0, 0, 0));
@@ -1299,7 +1305,7 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
 
     pub fn scale_up_divider(&self, factor: usize, border: bool, divider: Colour) -> Shape {
         let bord = if border { 2 } else { 0 };
-        let resize = divider != Colour::NoColour;
+        let resize = divider != NoColour;
         let size = if resize { factor + 1 } else { factor };
         let div = if !resize { 0 } else { factor - 1 };
         let mut cells = Matrix::new(self.cells.rows * factor + div + bord, self.cells.columns * factor + div + bord, Cell::new(0, 0, 0));
@@ -1332,7 +1338,7 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         for ((x, y), c) in self.cells.items() {
             let pred = fc(x, y, self.cells.rows, self.cells.columns);
 
-            if c.colour == Colour::Black && pred || hole && c.colour != Colour::Black && !pred {
+            if c.colour == Black && pred || hole && c.colour != Black && !pred {
                 return false;
             }
         }
@@ -1378,6 +1384,28 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
 
     pub fn has_open_hole_right(&self) -> bool {
         self.has_border_hole(false, &|x, y, rows, _cols| x == 0 || y == 0 || x == rows - 1)
+    }
+
+    pub fn has_border_break(&self) -> (Direction, usize, usize) {
+        for ((r, c), cell) in self.cells.items() {
+            let grow = self.orow + r;
+            let gcol = self.ocol + c;
+
+            if cell.colour == Black && r == 0 {
+                return (Up, grow, gcol);
+            }
+            if cell.colour == Black && c == 0  {
+                return (Left, grow, gcol);
+            }
+            if cell.colour == Black && r == self.cells.rows - 1 {
+                return (Down, grow, gcol);
+            }
+            if cell.colour == Black && c == self.cells.columns - 1 {
+                return (Right, grow, gcol);
+            }
+        }
+
+        (Other, 0, 0)
     }
 
     // TODO - remove old other from Shapes?
@@ -1452,7 +1480,7 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         let (s, o) = if self.size() > other.size() { (self, other) } else { (other, self) };
         if s.width() < 3 || s.height() < 3 || s.width() < o.width() + 2 || s.height() < o.height() + 2 { return false };
         for (x, y) in other.cells.keys() {
-            if x != 0 && y != 0 && x < s.cells.rows && x < s.cells.columns && s.cells[(x, y)].colour != Colour::Black {
+            if x != 0 && y != 0 && x < s.cells.rows && x < s.cells.columns && s.cells[(x, y)].colour != Black {
                 return false;
             }
         }
@@ -1499,7 +1527,7 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
 
     pub fn is_single_colour(&self) -> bool {
         let mut first = true;
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for c in self.cells.values() {
             if first {
@@ -1574,7 +1602,7 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         let cols = if offy < 0 { (self.cells.columns as isize + offy) as isize as usize } else { self.cells.columns };
 //println!("{offx}/{offy} {}/{}", rows, cols);
 
-        let mut shape = Shape::new_sized_coloured(rows, cols, Colour::Black);
+        let mut shape = Shape::new_sized_coloured(rows, cols, Black);
 
         shape.ox = if x < 0 { 0 } else { x as usize };
         shape.oy = if y < 0 { 0 } else { y as usize };
@@ -1853,27 +1881,68 @@ println!("{rows}/{cols} {}/{} {x}/{y} {}/{}", self.cells.rows, self.cells.column
     }
 
     pub fn to_origin(&self) -> Self {
+        self.to_position(0, 0)
+    }
+
+    pub fn to_origin_mut(&mut self) {
+        self.to_position_mut(0, 0)
+    }
+
+    // relative so call to_origin first if absolute
+    pub fn to_position(&self, r: usize, c: usize) -> Self {
         let mut i = self.clone();
 
-        i.orow = 0;
-        i.ocol = 0;
-
-        for c in i.cells.values_mut() {
-            c.row -= self.orow;
-            c.col -= self.ocol;
-        }
+        i.to_position_mut(r, c);
 
         i
     }
 
-    pub fn to_origin_mut(&mut self) {
-        for c in self.cells.values_mut() {
-            c.row -= self.orow;
-            c.col -= self.ocol;
+    pub fn to_position_mut(&mut self, r: usize, c: usize) {
+        for cell in self.cells.values_mut() {
+            cell.row = cell.row - self.orow + r;
+            cell.col = cell.col - self.ocol + c;
         }
 
-        self.orow = 0;
-        self.ocol = 0;
+        self.orow = r;
+        self.ocol = c;
+    }
+
+    pub fn compare(&self, shape: &Self) -> bool {
+        if self.cells.rows != shape.cells.rows || self.cells.columns != shape.cells.columns {
+            return false;
+        }
+        let diffor = self.orow - shape.orow;
+        let diffoc = self.ocol - shape.ocol;
+
+        for r in 0 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                let col1 = self.cells[(r,c)].colour;
+                let col2 = shape.cells[(r,c)].colour;
+                let diffr = self.cells[(r,c)].row - shape.cells[(r,c)].row;
+                let diffc = self.cells[(r,c)].col - shape.cells[(r,c)].col;
+
+                if col1 != col2 || diffor != diffr || diffoc != diffc {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    // Shapesmust be the sample size
+    pub fn copy_into(&self, shape: &Self) -> Self {
+        let mut s = shape.clone();
+
+        if self.width() != shape.width() || self.height() != shape.height() {
+            return s;
+        }
+
+        for ((r, c), cell) in self.cells.items() {
+            s.cells[(r, c)].colour = cell.colour;
+        }
+
+        s
     }
 
     pub fn position(&self, ci: &Self) -> Self {
@@ -1947,69 +2016,18 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         for pat in &self.cats {
             match pat {
                 ShapeCategory::ArmTop(n) =>
-                    return (Direction::Up, *n),
+                    return (Up, *n),
                 ShapeCategory::ArmBottom(n) => 
-                    return (Direction::Down, *n),
+                    return (Down, *n),
                 ShapeCategory::ArmLeft(n) => 
-                    return (Direction::Left, *n),
+                    return (Left, *n),
                 ShapeCategory::ArmRight(n) => 
-                    return (Direction::Right, *n),
+                    return (Right, *n),
                 _ => ()
             }
         }
 
-        (Direction::Other, 0)
-    }
-
-    // diagonal to Edge
-    pub fn diagonal(&self, x: usize, y: usize, dir: Direction, colour: Colour) -> Self {
-        let mut shape = self.clone();
-
-        match dir {
-            Direction::Up => {
-                for xi in 0 ..= x {
-                    shape.cells[(xi, y)].colour = colour;
-                }
-            },
-            Direction::Down => {
-                for xi in x .. shape.cells.rows - 1 {
-                    shape.cells[(xi, y)].colour = colour;
-                }
-            },
-            Direction::Left => {
-                for yi in 0 ..= y {
-                    shape.cells[(x, yi)].colour = colour;
-                }
-            },
-            Direction::Right => {
-                for yi in y .. shape.cells.columns - 1 {
-                    shape.cells[(x, yi)].colour = colour;
-                }
-            },
-            Direction::TopRight => {
-                for (xi, yi) in (0 ..= x).rev().zip(y-1 .. shape.cells.columns) {
-                    shape.cells[(xi, yi)].colour = colour;
-                }
-            },
-            Direction::TopLeft => {
-                for (xi, yi) in (0 ..= x).zip(0 ..= y) {
-                    shape.cells[(xi, yi)].colour = colour;
-                }
-            },
-            Direction::BottomRight => {
-                for (xi, yi) in (x .. shape.cells.rows).zip(y .. self.cells.columns) {
-                    shape.cells[(xi, yi)].colour = colour;
-                }
-            },
-            Direction::BottomLeft => {
-                for (xi, yi) in (x-1 .. shape.cells.rows).zip((0 ..= y).rev()) {
-                    shape.cells[(xi, yi)].colour = colour;
-                }
-            },
-            Direction::Other => todo!(),
-        }
-
-        shape
+        (Other, 0)
     }
 
     pub fn trim_arm(&self) -> Self {
@@ -2018,13 +2036,13 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 //println!("--- {:?} {}", dir, distance);
 
         match dir {
-            Direction::Up =>
+            Up =>
                 self.subshape2(self.orow, self.cells.rows - distance, self.ocol, self.cells.columns),
-            Direction::Down => 
+            Down => 
                 self.subshape2(self.orow + distance, self.cells.rows - distance, self.ocol, self.cells.columns),
-            Direction::Left => 
+            Left => 
                 self.subshape2(self.orow, self.cells.rows, self.ocol, self.cells.columns - distance),
-            Direction::Right => 
+            Right => 
                 self.subshape2(self.orow + distance, self.cells.rows - distance, self.ocol + distance, self.cells.columns - distance),
             _ => self.clone(),
         }
@@ -2107,11 +2125,11 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
     // bool is true == X axis, false = Y axis
     pub fn striped_x(&self) -> Colour {
-        Colour::NoColour
+        NoColour
     }
 
     pub fn striped_y(&self) -> Colour {
-        Colour::NoColour
+        NoColour
     }
 
     pub fn strip_colours_x(&self) -> Vec<Colour> {
@@ -2142,7 +2160,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
     pub fn bordered_shape(&self) -> bool {
         let colour = self.cells[(0,0)].colour;
 
-        if self.cells.rows < 3 || self.cells.columns < 3 || colour == Colour::Black {
+        if self.cells.rows < 3 || self.cells.columns < 3 || colour == Black {
             return false;
         }
         
@@ -2166,7 +2184,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
     // Expensive!
     pub fn hollow(&self) -> bool {
-        if self.cells.rows < 3 || self.cells.columns < 3 || self.cells[(1,1)].colour != Colour::Black && self.cells.rows == 3 && self.cells.columns == 3 && !self.is_full(){
+        if self.cells.rows < 3 || self.cells.columns < 3 || self.cells[(1,1)].colour != Black && self.cells.rows == 3 && self.cells.columns == 3 && !self.is_full(){
             return false;
         }
 //self.show();
@@ -2174,7 +2192,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         'outer:
         for ((x, y), c) in self.cells.items() {
             // Interior cells only interesting
-            if x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1 || c.colour != Colour::Black {
+            if x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1 || c.colour != Black {
                 continue;
             }
 
@@ -2193,8 +2211,41 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         false
     }
 
+    /*
+    pub fn find_hollows(&self) -> Shapes {
+        if self.cells.rows < 3 || self.cells.columns < 3 || self.cells[(1,1)].colour != Black && self.cells.rows == 3 && self.cells.columns == 3 && !self.is_full(){
+            return Shapes::new();
+        }
+//self.show();
+        let mut shapes = Shapes::new_from_shape(self);
+
+        'outer:
+        for ((x, y), c) in self.cells.items() {
+            // Interior cells only interesting
+            if x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1 || c.colour != Black {
+                continue;
+            }
+
+            let reachable = self.cells.bfs_reachable((x, y), true, |i| self.cells[i].colour != self.colour);
+
+            for (x,y) in &reachable {
+                if *x == 0 || *y == 0 || *x == self.cells.rows - 1 || *y == self.cells.columns - 1 {
+                    continue 'outer;
+                }
+            }
+
+            let s = Shape::shape_from_reachable(self, &reachable);
+
+            shapes.shapes.push(s);
+        }
+//println!("{hollow}");
+
+        shapes
+    }
+    */
+
     pub fn hollow_colour_count(&self) -> (Colour, usize) {
-        let ss = self.fill_boudary_colour().to_grid().find_colour_patches(Colour::Black);
+        let ss = self.fill_boundary_colour().to_grid().find_colour_patches(Black);
 
         (self.colour, ss.shapes.len())
     }
@@ -2211,20 +2262,10 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         true
     }
 
-    pub fn is_full(&self) -> bool {
-        for (x, y) in self.cells.keys() {
-            if self.cells[(x, y)].colour == Colour::Black {
-                return false;
-            }
-        }
-
-        true
-    }
-
     pub fn toddle_colour(&self, bg: Colour, fg: Colour) -> Self {
-        let s = self.recolour(bg, Colour::ToBlack + bg).recolour(fg, bg);
+        let s = self.recolour(bg, ToBlack + bg).recolour(fg, bg);
 
-        s.recolour(Colour::ToBlack + bg, fg)
+        s.recolour(ToBlack + bg, fg)
     }
 
     pub fn extend_top(&self, n: usize) -> Self {
@@ -2278,7 +2319,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
     pub fn dense(&self) -> bool {
         for c in self.cells.values() {
-            if c.colour == Colour::Black {
+            if c.colour == Black {
                 return false;
             }
         }
@@ -2318,7 +2359,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         let mut cols: BTreeMap<usize, usize> = BTreeMap::new();
 
         for ((row, col), c) in self.cells.items() {
-            if c.colour != Colour::Black {
+            if c.colour != Black {
                 *rows.entry(row).or_insert(0) += 1;
                 *cols.entry(col).or_insert(0) += 1;
             }
@@ -2326,12 +2367,12 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
         for ((row, col), cell) in s.cells.items_mut() {
             if let Some(r) = rows.get(&row) {
-                if *r > 3 && cell.colour == Colour::Black {
+                if *r > 3 && cell.colour == Black {
                     cell.colour = colour;
                 }
             }
             if let Some(c) = cols.get(&col) {
-                if *c > 3 && cell.colour == Colour::Black {
+                if *c > 3 && cell.colour == Black {
                     cell.colour = colour;
                 }
             }
@@ -2346,14 +2387,14 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         let mut nr = 0;
 
         for ((r, c), cell) in self.cells.items() {
-            if cell.colour == Colour::Black {
+            if cell.colour == Black {
                 if !black && nr == r {
                     fb.push((r,c));
                 }
             } else if c == 0 {
                 nr = r + 1;
             }
-            black = cell.colour == Colour::Black;
+            black = cell.colour == Black;
         }
 
         fb
@@ -2367,7 +2408,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
         let height = self.cells.rows + thickness * 2;
         let width = self.cells.columns + thickness * 2;
-        let mut shape = Shape::new_sized_coloured(height, width, Colour::Transparent);
+        let mut shape = Shape::new_sized_coloured(height, width, Transparent);
 
         //let this = self.translate_absolute(100, 100);
 //println!("{this:?}");
@@ -2445,8 +2486,8 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         if !has_border && self.has_open_hole_right() {
             self.cats.insert(ShapeCategory::OpenRightHole);
         }
-//self.show();
-        if !has_border && self.is_full() {
+        //if !has_border && self.is_full() {
+        if self.is_full() {
             self.cats.insert(ShapeCategory::Full);
         }
         /*
@@ -2480,74 +2521,74 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         let mut m = cells.clone();
 
         for ((x, y), c) in m.items_mut() {
-            if c.colour == Colour::Black { continue; }
+            if c.colour == Black { continue; }
 
             let cat = 
                 if x == 0 {
-                    if (y == 0 || cells[(x,y-1)].colour == Colour::Black) && (y == cells.columns - 1 || cells[(x,y+1)].colour == Colour::Black) {
+                    if (y == 0 || cells[(x,y-1)].colour == Black) && (y == cells.columns - 1 || cells[(x,y+1)].colour == Black) {
                         CellCategory::PointT
                     } else if y == 0 {
-                        if cells.rows == 1 || cells[(x+1,y)].colour == Colour::Black {
+                        if cells.rows == 1 || cells[(x+1,y)].colour == Black {
                             CellCategory::PointL
                         } else {
                             CellCategory::CornerTL
                         }
                     } else if y == cells.columns - 1 {
                         CellCategory::CornerTR
-                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == Colour::Black {
+                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == Black {
                         CellCategory::InternalCornerTR
-                    } else if y > 0 && cells[(x,y-1)].colour == Colour::Black {
+                    } else if y > 0 && cells[(x,y-1)].colour == Black {
                         CellCategory::InternalCornerTL
-                    } else if cells.rows == 1 || cells[(x+1,y)].colour == Colour::Black {
+                    } else if cells.rows == 1 || cells[(x+1,y)].colour == Black {
                         CellCategory::StemLR
                     } else {
                         CellCategory::EdgeT
                     }
                 } else if x == cells.rows - 1 {
-                    if (y == 0 || cells[(x,y-1)].colour == Colour::Black) && (y == cells.columns - 1 || cells[(x,y+1)].colour == Colour::Black) {
+                    if (y == 0 || cells[(x,y-1)].colour == Black) && (y == cells.columns - 1 || cells[(x,y+1)].colour == Black) {
                         CellCategory::PointB
                     } else if y == 0 {
                         CellCategory::CornerBL
                     } else if y == cells.columns - 1 {
-                        if cells[(x-1,y)].colour == Colour::Black {
+                        if cells[(x-1,y)].colour == Black {
                             CellCategory::PointR
                         } else {
                             CellCategory::CornerBR
                         }
-                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == Colour::Black {
+                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == Black {
                         CellCategory::InternalCornerBR
-                    } else if y > 0 && cells[(x,y-1)].colour == Colour::Black {
+                    } else if y > 0 && cells[(x,y-1)].colour == Black {
                         CellCategory::InternalCornerBL
-                    } else if cells.rows == 1 || cells[(x-1,y)].colour == Colour::Black {
+                    } else if cells.rows == 1 || cells[(x-1,y)].colour == Black {
                         CellCategory::StemLR
                     } else {
                         CellCategory::EdgeB
                     }
                 } else if y == 0 {
 //println!("{x}/{y}: {:?} {:?}", cells[(x-1,y)].colour, cells[(x+1,y)].colour);
-                    if (x == 0 || cells[(x-1,y)].colour == Colour::Black) && (x == cells.rows - 1 || cells[(x+1,y)].colour == Colour::Black) {
+                    if (x == 0 || cells[(x-1,y)].colour == Black) && (x == cells.rows - 1 || cells[(x+1,y)].colour == Black) {
                         CellCategory::PointL
-                    } else if x > 0 && cells[(x-1,y)].colour == Colour::Black {
+                    } else if x > 0 && cells[(x-1,y)].colour == Black {
                         CellCategory::InternalCornerTL
-                    } else if cells.columns == 1 || cells[(x,y+1)].colour == Colour::Black {
+                    } else if cells.columns == 1 || cells[(x,y+1)].colour == Black {
                         CellCategory::StemTB
                     } else {
                         CellCategory::EdgeL
                     }
                 } else if y == cells.columns - 1 {
 //println!("{x}/{y}: {:?} {:?}", cells[(x-1,y)].colour, cells[(x+1,y)].colour);
-                    if (x == 0 || cells[(x-1,y)].colour == Colour::Black) && (x == cells.rows - 1 || cells[(x+1,y)].colour == Colour::Black) {
+                    if (x == 0 || cells[(x-1,y)].colour == Black) && (x == cells.rows - 1 || cells[(x+1,y)].colour == Black) {
                         CellCategory::PointR
-                    } else if x > 0 && cells[(x-1,y)].colour == Colour::Black {
+                    } else if x > 0 && cells[(x-1,y)].colour == Black {
                         CellCategory::InternalCornerTR
-                    } else if cells.columns == 1 || cells[(x,y-1)].colour == Colour::Black {
+                    } else if cells.columns == 1 || cells[(x,y-1)].colour == Black {
                         CellCategory::StemTB
                     } else {
                         CellCategory::EdgeR
                     }
-                } else if cells[(x-1,y)].colour == Colour::Black && cells[(x+1,y)].colour == Colour::Black {
+                } else if cells[(x-1,y)].colour == Black && cells[(x+1,y)].colour == Black {
                     CellCategory::StemLR
-                } else if cells[(x,y-1)].colour == Colour::Black && cells[(x,y+1)].colour == Colour::Black {
+                } else if cells[(x,y-1)].colour == Black && cells[(x,y+1)].colour == Black {
                     CellCategory::StemTB
                 } else {
                     CellCategory::Middle
@@ -2581,11 +2622,11 @@ impl Default for Shapes {
 
 impl Shapes {
     pub fn new() -> Self {
-        Self { nx: 0, ny: 0, colour: Colour::NoColour, shapes: Vec::new(), coloured_shapes: Vec::new(), cats: BTreeSet::new(), coloured_cats: BTreeSet::new() }
+        Self { nx: 0, ny: 0, colour: NoColour, shapes: Vec::new(), coloured_shapes: Vec::new(), cats: BTreeSet::new(), coloured_cats: BTreeSet::new() }
     }
 
     pub fn new_sized(nx: usize, ny: usize) -> Self {
-        Self { nx, ny, colour: Colour::NoColour, shapes: Vec::new(), coloured_shapes: Vec::new(), cats: BTreeSet::new(), coloured_cats: BTreeSet::new() }
+        Self { nx, ny, colour: NoColour, shapes: Vec::new(), coloured_shapes: Vec::new(), cats: BTreeSet::new(), coloured_cats: BTreeSet::new() }
     }
 
     pub fn new_given(nx: usize, ny: usize, shapes: &Vec<Shape>) -> Self {
@@ -2599,14 +2640,14 @@ impl Shapes {
     // May be same size as source grid
     pub fn new_shapes(shapes: &[Shape]) -> Self {
         let mut new_shapes = Self::new();
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for s in shapes.iter() {
             new_shapes.add(s);
-            if colour == Colour::NoColour {
+            if colour == NoColour {
                 colour = s.colour;
             } else if colour != s.colour {
-                colour = Colour::Mixed;
+                colour = Mixed;
             }
         }
         new_shapes.colour = colour;
@@ -2616,19 +2657,25 @@ impl Shapes {
 
     pub fn new_shapes_sized(nx: usize, ny: usize, shapes: &[Shape]) -> Self {
         let mut new_shapes = Self::new_sized(nx, ny);
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for s in shapes.iter() {
             new_shapes.add(s);
-            if colour == Colour::NoColour {
+            if colour == NoColour {
                 colour = s.colour;
             } else if colour != s.colour {
-                colour = Colour::Mixed;
+                colour = Mixed;
             }
         }
         new_shapes.colour = colour;
 
         new_shapes
+    }
+
+    pub fn merge_mut(&mut self, other: &Self) {
+        for s in &other.shapes {
+            self.shapes.push(s.clone());
+        }
     }
 
     pub fn joined_by(&self) -> Option<Vec<(Shape, Shape, Shape)>> {
@@ -2639,6 +2686,19 @@ impl Shapes {
         // TODO complete
 
         None
+    }
+
+    pub fn is_line(&self) -> bool {
+        if self.shapes.is_empty() {
+            return false;
+        }
+        for s in self.shapes.iter() {
+            if !s.is_line() {
+                return false;
+            }
+        }
+
+        true
     }
 
     pub fn is_square(&self) -> bool {
@@ -2687,6 +2747,47 @@ impl Shapes {
         None
     }
 
+    pub fn embellish(&self, colour: Colour) ->  Shapes {
+        let mut shapes = self.clone();
+
+        for s in self.shapes.iter() {
+            if s.is_pixel() {
+                let ns = if s.orow == 0 && s.ocol == 0 {
+                    let mut ns = Shape::new_sized_coloured_position(s.orow, s.ocol, 2, 2, Black);
+                    ns.cells[(1,1)].colour = colour;
+
+                    ns
+                } else if s.orow == 0 {
+                    let mut ns = Shape::new_sized_coloured_position(s.orow, s.ocol - 1, 2, 3, Black);
+                    ns.cells[(1,0)].colour = colour;
+                    ns.cells[(1,2)].colour = colour;
+
+                    ns
+                } else if s.ocol == 0 {
+                    let mut ns = Shape::new_sized_coloured_position(s.orow - 1, s.ocol, 3, 2, Black);
+                    ns.cells[(0,1)].colour = colour;
+                    ns.cells[(2,1)].colour = colour;
+
+                    ns
+                } else {
+                    let mut ns = Shape::new_sized_coloured_position(s.orow - 1, s.ocol - 1, 3, 3, Black);
+                    ns.cells[(0,0)].colour = colour;
+                    ns.cells[(0,2)].colour = colour;
+                    ns.cells[(2,0)].colour = colour;
+                    ns.cells[(2,2)].colour = colour;
+
+                    ns
+                };
+
+                shapes.shapes.push(ns);
+//            } else {
+//                shapes.shapes.push(s.clone());
+            }
+        }
+
+        shapes
+    }
+
     pub fn colours(&self) -> Vec<Colour> {
         self.shapes.iter().map(|s| s.colour).collect()
     }
@@ -2710,48 +2811,64 @@ impl Shapes {
         None
     }
 
-    /*
-    // Consolidate_shapes might be better
-    pub fn patch_shapes(&self) -> Shapes {
-        let mut ss: Vec<Shape> = Vec::new(); 
-        let mut used: Vec<Shape> = Vec::new(); 
+    pub fn colour_groups_to_shapes(&self, bg: Colour) -> Shapes {
+        let mut h: BTreeMap<Colour, Vec<Shape>> = BTreeMap::new();
 
-        for big in self.shapes.iter() {
-            let mut added = false;
-            if big.size() >= 4 {
-                for small in self.shapes.iter() {
-                    if small.size() < big.size() && small.contained_by(&big) {
-                        let mut bs = big.clone();
-                        let x = big.orow;
-                        let y = big.ocol;
-
-                        for c in small.cells.values() {
-                            bs.cells[(c.row - x, c.col - y)].row = c.row;
-                            bs.cells[(c.row - x, c.col - y)].col = c.row;
-                            bs.cells[(c.row - x, c.col - y)].colour = c.colour;
-                        }
-
-                        // May be more than 1!
-                        ss.push(bs);
-                        added = true;
-                        used.push(small.clone());
-                        //break;
-//println!(">>>>");
-//small.show_summary();
-//big.show_summary();
-//println!("<<<<");
-                    }
-                }
-            }
-            if !added && big.size() >= 4 && !used.contains(&big) {
-                ss.push(big.clone());
+        for shape in self.shapes.iter() {
+            if shape.is_pixel() {
+                h.entry(shape.colour).or_insert(Vec::new()).push(shape.clone());
             }
         }
-//Shapes::new_shapes(&ss).show();
 
-        Shapes::new_shapes(&ss)
+        let mut max_r = 0;
+        let mut max_c = 0;
+
+        for (_, v) in h.iter() {
+            let mut smin_r = usize::MAX;
+            let mut smax_r = 0;
+            let mut smin_c = usize::MAX;
+            let mut smax_c = 0;
+
+            for s in v.iter() {
+                smin_r = smin_r.min(s.orow);
+                smax_r = smax_r.max(s.orow + s.cells.rows - 1);
+                smin_c = smin_c.min(s.ocol);
+                smax_c = smax_c.max(s.ocol + s.cells.columns - 1);
+            }
+            max_r = max_r.max(smax_r - smin_r);
+            max_c = max_c.max(smax_c - smin_c);
+        }
+
+        let mut ss = Self::new_sized(max_r + 1, max_c + 1);
+//println!("{} {}", max_r + 1, max_c + 1);
+
+        ss.shapes.push(Shape::new_sized_coloured(max_r + 1, max_c + 1, bg));
+
+        for (_, v) in h.iter() {
+//println!("--- {k:?}");
+            let mut orow = usize::MAX;
+            let mut ocol = usize::MAX;
+            let mut smax_r = 0;
+            let mut smax_c = 0;
+
+            for s in v.iter() {
+                orow = orow.min(s.orow);
+                ocol = ocol.min(s.ocol);
+                smax_r = smax_r.max(s.orow);
+                smax_c = smax_c.max(s.ocol);
+            }
+
+            for s in v.iter() {
+                let r = (max_r - (smax_r - orow)) / 2;
+                let c = (max_c - (smax_c - ocol)) / 2;
+                let s = s.to_position(s.orow - orow + r, s.ocol - ocol + c);
+
+                ss.shapes.push(s)
+            }
+        }
+
+        ss
     }
-    */
 
     pub fn colour_cnt(&self) -> BTreeMap<Colour, usize> {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
@@ -2807,9 +2924,9 @@ impl Shapes {
     pub fn to_shape(&self) -> Shape {
         let (min_x, min_y, max_x, max_y) = self.corners();
 
-        let mut shape = Shape::new_sized_coloured_position(min_x, min_y, max_x - min_x, max_y - min_y, Colour::Black);
+        let mut shape = Shape::new_sized_coloured_position(min_x, min_y, max_x - min_x, max_y - min_y, Black);
 
-        shape.colour = Colour::Mixed;
+        shape.colour = Mixed;
         shape.orow = min_x;
         shape.ocol = min_y;
 
@@ -2966,7 +3083,7 @@ impl Shapes {
         let m = scm.iter().min_by_key(|(_, v)| v.len());
 println!("{m:?}");
 
-        Colour::NoColour
+        NoColour
     }
     */
 
@@ -3097,16 +3214,16 @@ println!("{m:?}");
 
     pub fn find_pixels(&self) -> Self {
         let mut pixels = Self::new_sized(self.nx, self.ny);
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for s in self.shapes.iter() {
             if s.is_pixel() {
                 pixels.shapes.push(s.clone());
 
-                if colour == Colour::NoColour {
+                if colour == NoColour {
                     colour = s.colour;
                 } else if colour != s.colour {
-                    colour = Colour::Mixed;
+                    colour = Mixed;
                 }
             }
         }
@@ -3118,16 +3235,16 @@ println!("{m:?}");
 
     pub fn find_shapes(&self) -> Self {
         let mut shapes = Self::new_sized(self.nx, self.ny);
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for s in self.shapes.iter() {
             if !s.is_pixel() {
                 shapes.shapes.push(s.clone());
 
-                if colour == Colour::NoColour {
+                if colour == NoColour {
                     colour = s.colour;
                 } else if colour != s.colour {
-                    colour = Colour::Mixed;
+                    colour = Mixed;
                 }
             }
         }
@@ -3150,14 +3267,14 @@ println!("{m:?}");
     }
 
     fn find_colour(shapes: &Vec<Shape>) -> Colour {
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for s in shapes {
-            if s.colour != Colour::Black {
-                if colour == Colour::NoColour {
+            if s.colour != Black {
+                if colour == NoColour {
                     colour = s.colour;
                 } else if colour != s.colour {
-                    colour = Colour::Mixed;
+                    colour = Mixed;
                     break;
                 }
             }
@@ -3308,7 +3425,7 @@ println!("{m:?}");
     pub fn position_pixels(&self) -> Option<(Self, Self)> {
         let mut xp = usize::MAX;
         let mut yp = usize::MAX;
-        let mut cp = Colour::NoColour;
+        let mut cp = NoColour;
         let mut xgap = 0;
         let mut ygap = 0;
         let mut pos: Vec<Shape> = Vec::new();
@@ -3548,10 +3665,10 @@ println!("{m:?}");
         }
         /*
         */
-        if self.colour == Colour::NoColour {
+        if self.colour == NoColour {
             self.colour = shape.colour;
-        } else if self.colour != shape.colour && self.colour != Colour::Black {
-            self.colour = Colour::Mixed;
+        } else if self.colour != shape.colour && self.colour != Black {
+            self.colour = Mixed;
         }
 
         self.shapes.push(shape.clone());
@@ -3585,23 +3702,23 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
     pub fn noise_colour(&self) -> Colour {
         let mut size = self.shapes.len();
 
-        if size < 3 || self.colour != Colour::Mixed {
-            return Colour::Black;
+        if size < 3 || self.colour != Mixed {
+            return Black;
         }
 
         let mut h: BTreeMap<usize, usize> = BTreeMap::new();
 
         for c in &self.shapes {
 //c.show();
-            //if c.colour != Colour::Mixed {
-            //    return Colour::Black;
+            //if c.colour != Mixed {
+            //    return Black;
             //} else {
                 *h.entry(Colour::to_usize(c.colour)).or_insert(0) += 1;
             //}
         }
 
         //if h.len() < 8 {
-            //return Colour::Black;
+            //return Black;
         //}
 
         size -= h.len();
@@ -3612,7 +3729,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
             }
         }
 
-        Colour::Black
+        Black
     }
 
     // Must be supplied with single colour shapes
@@ -3620,7 +3737,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
         let shapes: Vec<Shape> = Vec::new();
         let size = self.shapes.len();
 
-        if size < 3 || self.colour != Colour::Mixed {
+        if size < 3 || self.colour != Mixed {
             return shapes;
         }
 
@@ -3646,7 +3763,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
 
         for s in self.shapes.iter() {
             if s.size() != self.size() && s.hollow() {
-                let ss = s.recolour(Colour::Blue, Colour::Teal);
+                let ss = s.recolour(Blue, Teal);
 
                 new_shapes.add(&ss);
             }
@@ -3729,8 +3846,8 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
                 if let Ok(mat) = s.cells.slice(0 .. x - s.orow, 0 .. y - s.ocol) {
                     trimmed.shapes.push(Shape::new_cells(&mat));
                 } 
-            } else {
-                trimmed.shapes.push(s.clone());
+//            } else {
+//                trimmed.shapes.push(s.clone());
             }
         }
 
@@ -3740,21 +3857,21 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
     pub fn trim_to_grid(&self) -> Grid {
         let trimmed = self.trim_grid();
 
-        trimmed.to_grid_impl(Colour::Black, false)
+        trimmed.to_grid_impl(Black, false)
     }
 
     pub fn trim_to_grid_transparent(&self) -> Grid {
         let trimmed = self.trim_grid();
 
-        trimmed.to_grid_impl(Colour::Black, true)
+        trimmed.to_grid_impl(Black, true)
     }
 
     pub fn to_grid(&self) -> Grid {
-        self.to_grid_impl(Colour::Black, false)
+        self.to_grid_impl(Black, false)
     }
 
     pub fn to_grid_transparent(&self) -> Grid {
-        self.to_grid_impl(Colour::Black, true)
+        self.to_grid_impl(Black, true)
     }
 
     pub fn to_grid_colour(&self, colour: Colour) -> Grid {
@@ -3779,10 +3896,13 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
 
         for shape in &self.shapes {
             for c in shape.cells.values() {
-                if c.colour == Colour::Transparent {
+                if  grid.cells.rows <= c.row || grid.cells.columns <= c.col {
+                    break;
+                }
+                if c.colour == Transparent {
                     continue;
                 }
-                if !transparent || c.colour != Colour::Black {
+                if !transparent || c.colour != Black {
                     grid.cells[(c.row, c.col)].colour = c.colour;
                 }
             }
@@ -3839,7 +3959,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
     }
 
     pub fn have_common_pixel(&self) -> (Colour,Vec<Self>) {
-        (Colour::NoColour, vec![])
+        (NoColour, vec![])
     }
 
     /*
@@ -3850,11 +3970,11 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
 
     // bool is true == X axis, false = Y axis
     pub fn striped_x(&self) -> Colour {
-        Colour::NoColour
+        NoColour
     }
 
     pub fn striped_y(&self) -> Colour {
-        Colour::NoColour
+        NoColour
     }
 
     /*
@@ -4035,7 +4155,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
                         continue 'outer;
                     }
 
-                    let same_colour = shape1.colour != Colour::Mixed && shape1.colour == shape2.colour;
+                    let same_colour = shape1.colour != Mixed && shape1.colour == shape2.colour;
                     let same_shape = shape1.same_shape(shape2);
                     let same_size = shape1.same_size(shape2);
                     let same_pixels = shape1.pixels() == shape2.pixels();

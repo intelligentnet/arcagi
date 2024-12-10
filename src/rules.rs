@@ -20,9 +20,35 @@ pub fn move_only(grid: &Grid, n: &mut usize) -> Grid {
     }
 }
 
-// Experiiments on difference allowed
+// Experiments on gravity
 pub fn gravity_only(grid: &Grid, n: &mut usize) -> Grid {
     let func = [Grid::stretch_down, Grid::gravity_down, Grid::gravity_up];
+    if *n == usize::MAX {
+        *n = func.len();
+    }
+    if *n == 0 {
+        Grid::trivial()
+    } else {
+        func[func.len() - *n](grid)
+    }
+}
+
+// Experiments on mirroring and duplicating
+pub fn mirror_only(grid: &Grid, n: &mut usize) -> Grid {
+    let func = [Grid::mirror_right, Grid::mirror_left, Grid::mirror_down, Grid::mirror_up, Grid::dup_right, Grid::dup_left, Grid::dup_down, Grid::dup_up];
+    if *n == usize::MAX {
+        *n = func.len();
+    }
+    if *n == 0 {
+        Grid::trivial()
+    } else {
+        func[func.len() - *n](grid)
+    }
+}
+
+// Experiments on gravity
+pub fn dup_only(grid: &Grid, n: &mut usize) -> Grid {
+    let func = [Grid::dup_right, Grid::dup_left, Grid::dup_down, Grid::dup_up];
     if *n == usize::MAX {
         *n = func.len();
     }
@@ -64,7 +90,7 @@ pub fn diff_only(grid: &Grid, colour: Colour, n: &mut usize) -> Grid {
 }
 
 pub fn transform_only(grid: &Grid, n: &mut usize) -> Grid {
-    let func = [Grid::rot_90, Grid::rot_180, Grid::rot_270, Grid::transposed, Grid::mirrored_x, Grid::mirrored_y];
+    let func = [Grid::rot_00,  Grid::rot_90, Grid::rot_180, Grid::rot_270, Grid::transposed, Grid::mirrored_rows, Grid::mirrored_cols];
 
     if *n == usize::MAX {
         *n = func.len();

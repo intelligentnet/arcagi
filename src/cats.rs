@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::ops::{Add, Sub};
+use strum_macros::{EnumIter, EnumString};
 
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -347,6 +348,7 @@ pub enum GridCategory {
     InLessCountOut,
     InLessCountOutColoured,
     InLessThanOut,
+    InLine,
     InOutSameShapes,
     InOutSameShapesColoured,
     InOutSameSize,
@@ -382,6 +384,7 @@ pub enum GridCategory {
     OutLessCountIn,
     OutLessCountInColoured,
     OutLessThanIn,
+    OutLine,
     OutSameSize,
     OutSquare,
     OverlayInSame,
@@ -398,6 +401,12 @@ pub enum GridCategory {
     ShapeMinCntOut(usize),
     SingleColouredShapeIn,
     SingleColouredShapeOut,
+    SingleColourCountIn(usize),
+    SingleColourCountOut(usize),
+    SingleColourIn2xOut,
+    SingleColourIn4xOut,
+    SingleColourOut2xIn,
+    SingleColourOut4xIn,
     SingleColourIn,
     SingleColourOut,
     SinglePixelOut,
@@ -407,7 +416,11 @@ pub enum GridCategory {
     SquareShapeSize(usize),
     SurroundOut,
     SymmetricIn,
+    SymmetricInLR,
+    SymmetricInUD,
     SymmetricOut,
+    SymmetricOutLR,
+    SymmetricOutUD,
     Transpose,
 //    GridToSize,
 //    GridCalculated,
@@ -490,38 +503,123 @@ pub enum ShapeCategory {
     Other,
 }
 
-
-#[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Direction {
     Up,
     Down,
     Left,
     Right,
-    TopLeft,
-    TopRight,
-    BottomLeft,
-    BottomRight,
+    UpLeft,
+    UpRight,
+    DownLeft,
+    DownRight,
+    FromUpLeft,
+    FromUpRight,
+    FromDownLeft,
+    FromDownRight,
     Other,
 }
 
 impl Direction {
-    pub fn opposite(&self) -> Self {
+    pub fn inverse(&self) -> Self {
         match self {
             Self::Up            => Self::Down,
             Self::Down          => Self::Up,
             Self::Left          => Self::Right,
             Self::Right         => Self::Left,
-            Self::TopLeft       => Self::BottomRight,
-            Self::TopRight      => Self::BottomLeft,
-            Self::BottomLeft    => Self::TopRight,
-            Self::BottomRight   => Self::TopLeft,
+            Self::UpLeft        => Self::DownRight,
+            Self::UpRight       => Self::DownLeft,
+            Self::DownLeft      => Self::UpRight,
+            Self::DownRight     => Self::UpLeft,
+            Self::FromUpLeft    => Self::FromDownRight,
+            Self::FromUpRight   => Self::FromDownLeft,
+            Self::FromDownLeft  => Self::FromUpRight,
+            Self::FromDownRight => Self::FromUpLeft,
             Self::Other         => Self::Other,
         }
     }
 }
 
-#[repr(usize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, EnumIter, EnumString)]
+pub enum Transformation {   // TODO mimimise this list, some are equivalent
+    NoTrans,
+    MirrorX,
+    MirrorY,
+    Trans,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    Rotate90MirrorX,
+    Rotate180MirrorX,
+    Rotate270MirrorX,
+    Rotate90MirrorY,
+    Rotate180MirrorY,
+    Rotate270MirrorY,
+    MirrorXRotate90,
+    MirrorXRotate180,
+    MirrorXRotate270,
+    MirrorYRotate90,
+    MirrorYRotate180,
+    MirrorYRotate270,
+}
+
+impl Transformation {
+    pub fn inverse(&self) -> Self {
+        match self {
+            Self::NoTrans           => Self::NoTrans,
+            Self::MirrorX           => Self::MirrorX,
+            Self::MirrorY           => Self::MirrorY,
+            Self::Trans             => Self::Trans,
+            Self::Rotate90          => Self::Rotate270,
+            Self::Rotate180         => Self::Rotate180,
+            Self::Rotate270         => Self::Rotate90,
+            Self::Rotate90MirrorX   => Self::MirrorXRotate270,
+            Self::Rotate180MirrorX  => Self::MirrorXRotate180,
+            Self::Rotate270MirrorX  => Self::MirrorXRotate90,
+            Self::Rotate90MirrorY   => Self::MirrorYRotate270,
+            Self::Rotate180MirrorY  => Self::MirrorYRotate180,
+            Self::Rotate270MirrorY  => Self::MirrorYRotate90,
+            Self::MirrorXRotate90   => Self::Rotate270MirrorX,
+            Self::MirrorXRotate180  => Self::Rotate180MirrorX,
+            Self::MirrorXRotate270  => Self::Rotate90MirrorX,
+            Self::MirrorYRotate90   => Self::Rotate270MirrorY,
+            Self::MirrorYRotate180  => Self::Rotate180MirrorY,
+            Self::MirrorYRotate270  => Self::Rotate90MirrorY,
+        }
+    }
+}
+
+/*
+impl FromStr for Transformation {
+    type Err = ();
+
+    fn from(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "NoTrans"        	=> Ok(Self::NoTrans),
+            "MirrorX"        	=> Ok(Self::MirrorX),
+            "MirrorY"	        => Ok(Self::MirrorY),
+            "Trans"	            => Ok(Self::Trans),
+            "Rotate90"	        => Ok(Self::Rotate90),
+            "Rotate180"	        => Ok(Self::Rotate180),
+            "Rotate270"	        => Ok(Self::Rotate270),
+            "Rotate90MirrorX"	=> Ok(Self::Rotate90MirrorX),
+            "Rotate180MirrorX"	=> Ok(Self::Rotate180MirrorX),
+            "Rotate270MirrorX"	=> Ok(Self::Rotate270MirrorX),
+            "Rotate90MirrorY"	=> Ok(Self::Rotate90MirrorY),
+            "Rotate180MirrorY"	=> Ok(Self::Rotate180MirrorY),
+            "Rotate270MirrorY"	=> Ok(Self::Rotate270MirrorY),
+            "MirrorXRotate90"	=> Ok(Self::MirrorXRotate90),
+            "MirrorXRotate180"	=> Ok(Self::MirrorXRotate180),
+            "MirrorXRotate270"	=> Ok(Self::MirrorXRotate270),
+            "MirrorYRotate90"	=> Ok(Self::MirrorYRotate90),
+            "MirrorYRotate180"	=> Ok(Self::MirrorYRotate180),
+            "MirrorYRotate270"	=> Ok(Self::MirrorYRotate270),
+            _ => todo!(),
+        }
+    }
+}
+*/
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Tag {
     Colour,
@@ -530,7 +628,6 @@ pub enum Tag {
     Other,
 }
 
-#[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Action {
     Together,

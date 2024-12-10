@@ -13,42 +13,61 @@ use crate::runner::runner;
 //pub mod summary;
 
 #[no_mangle]
-pub extern "C" fn arcagi(data_type: i32, all_int: i32) {
-    let all: bool = all_int != 0;
-    match data_type {
-        0 => runner("training", "", all),
-        1 => runner("evaluation", "", all),
-        2 => runner("test", "", all),
-        _ => runner("training", "", all),
-    }
-}
-
-#[no_mangle]
 pub extern "C" fn training() {
-    runner("training", "", false)
+    runner("training", "", "", "trans", false)
 }
 
 #[no_mangle]
 pub extern "C" fn training_all() {
-    runner("training", "", true)
+    runner("training", "", "", "trans", true)
 }
 
 #[no_mangle]
 pub extern "C" fn evaluation() {
-    runner("evaluation", "", false)
+    runner("evaluation", "", "", "trans", false)
 }
 
 #[no_mangle]
 pub extern "C" fn evaluation_all() {
-    runner("evaluation", "", true)
+    runner("evaluation", "", "", "trans", true)
 }
 
 #[no_mangle]
 pub extern "C" fn test() {
-    runner("test", "", false)
+    runner("test", "", "", "trans", false)
 }
 
 #[no_mangle]
 pub extern "C" fn test_all() {
-    runner("test", "", true)
+    runner("test", "", "", "trans", true)
+}
+
+#[no_mangle]
+pub extern "C" fn training_trans() {
+    runner("training", "", "", "trans", false)
+}
+
+#[no_mangle]
+pub extern "C" fn training_all_trans() {
+    runner("training", "", "", "trans", true)
+}
+
+#[no_mangle]
+pub extern "C" fn evaluation_trans() {
+    runner("evaluation", "", "", "trans", false)
+}
+
+#[no_mangle]
+pub extern "C" fn evaluation_all_trans() {
+    runner("evaluation", "", "", "trans", true)
+}
+
+#[no_mangle]
+pub extern "C" fn test_trans() {
+    runner("test", "", "", "trans", false)
+}
+
+#[no_mangle]
+pub extern "C" fn test_all_trans() {
+    runner("test", "", "", "trans", true)
 }

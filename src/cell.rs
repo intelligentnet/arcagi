@@ -1,6 +1,7 @@
 use std::ops::Add;
 use std::cmp::Ordering;
 use num_traits::identities::Zero;
+use crate::cats::Colour::*;
 use crate::cats::{Colour, CellCategory};
 
 #[derive(Debug, Clone, Eq, Hash)]
@@ -24,7 +25,7 @@ impl Zero for Cell {
         Self {
             row: 0,
             col: 0,
-            colour: Colour::Black,
+            colour: Black,
             cat: CellCategory::BG,
         }
     }
@@ -58,7 +59,7 @@ impl Cell {
     }
 
     pub fn new_empty() -> Self {
-        Cell { row: 0, col: 0, colour: Colour::NoColour, cat: CellCategory::BG }
+        Cell { row: 0, col: 0, colour: NoColour, cat: CellCategory::BG }
     }
 
     pub fn new_colour(x: usize, y: usize, colour: Colour) -> Self {

@@ -1,5 +1,7 @@
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use crate::cats::*;
+use crate::cats::Colour::*;
+use crate::cats::GridCategory::*;
 use crate::data::*;
 use crate::grid::*;
 use crate::shape::*;
@@ -46,6 +48,34 @@ impl Example {
         Example { input, output, cat, pairs, coloured_pairs }
     }
 
+    pub fn transform(&self, trans: Transformation, input: bool) -> Self {
+        let mut example = self.clone();
+
+        example.transform_mut(trans, input);
+
+        example
+    }
+
+    pub fn transform_mut(&mut self, trans: Transformation, input: bool) {
+        let qgrid = if input { &mut self.input } else { &mut self.output };
+
+        qgrid.grid = qgrid.grid.transform(trans);
+
+        qgrid.shapes = if qgrid.bg == NoColour {
+            qgrid.grid.to_shapes()
+        } else {
+            qgrid.grid.to_shapes_bg(qgrid.bg)
+        };
+        qgrid.coloured_shapes = if qgrid.bg == NoColour {
+            qgrid.grid.to_shapes_coloured()
+        } else {
+            qgrid.grid.to_shapes_coloured_bg(qgrid.bg)
+        };
+        if !qgrid.black.is_empty() {
+            qgrid.black = qgrid.grid.find_black_patches();
+        }
+    }
+
     /*
     #[allow(clippy::nonminimal_bool)]
     pub fn bool_op(&self, op: BoolOp) -> Option<Grid> {
@@ -60,11 +90,11 @@ impl Example {
         let mut newg = Grid::blank(g1.x, g1.y);
 
         for (c1, c2) in g1.cells.iter().zip(&g2.cells) {
-            if (op == BoolOp::Xor && c1.colour != Colour::Black && c1.colour != Colour::Black && c1.colour != c2.colour) || 
-                (op == BoolOp::And && c1.colour != Colour::Black && c1.colour != Colour::Black && c1.colour == c2.colour) ||
-                (op == BoolOp::Or && (c1.colour != Colour::Black || c2.colour != Colour::Black))
+            if (op == BoolOp::Xor && c1.colour != Black && c1.colour != Black && c1.colour != c2.colour) || 
+                (op == BoolOp::And && c1.colour != Black && c1.colour != Black && c1.colour == c2.colour) ||
+                (op == BoolOp::Or && (c1.colour != Black || c2.colour != Black))
             {
-                newg.cells[(c1.x, c1.y)].colour = Colour::NoColour;
+                newg.cells[(c1.x, c1.y)].colour = NoColour;
             } else {
                 interesting = true;
             }
@@ -94,7 +124,7 @@ impl Example {
         let mut cats: BTreeSet<GridCategory> = BTreeSet::new();
 
         if output.grid.size() == 0 {
-            cats.insert(GridCategory::EmptyOutput);
+            cats.insert(EmptyOutput);
             //return cats;
         }
 
@@ -102,153 +132,165 @@ impl Example {
         let out_dim = output.grid.dimensions();
 
         if input.grid.is_empty() {
-            cats.insert(GridCategory::InEmpty);
+            cats.insert(InEmpty);
         }
         if in_dim.0 > 1 && in_dim.0 == in_dim.1 && out_dim.0 == out_dim.1 && in_dim == out_dim {
-            cats.insert(GridCategory::InOutSquareSameSize);
-            //cats.insert(GridCategory::InOutSameSize);
+            cats.insert(InOutSquareSameSize);
+            //cats.insert(InOutSameSize);
             if in_dim.0 % 2 == 0 {
-                cats.insert(GridCategory::InOutSquareSameSizeEven);
+                cats.insert(InOutSquareSameSizeEven);
             } else {
-                cats.insert(GridCategory::InOutSquareSameSizeOdd);
+                cats.insert(InOutSquareSameSizeOdd);
             }
 
             if input.grid.rotated_90(1).to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::Rot90);
+                cats.insert(Rot90);
             }
             if input.grid.rotated_90(2).to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::Rot180);
+                cats.insert(Rot180);
             }
             if input.grid.rotated_270(1).to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::Rot270);
+                cats.insert(Rot270);
             }
             if input.grid.transposed().to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::Transpose);
+                cats.insert(Transpose);
             }
             /* There are none?
             if input.grid.inv_transposed().to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::InvTranspose);
+                cats.insert(InvTranspose);
             }
             */
-            if input.grid.mirrored_x().to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::MirroredX);
+            if input.grid.mirrored_rows().to_json() == output.grid.to_json() {
+                cats.insert(MirroredX);
             }
-            if input.grid.mirrored_y().to_json() == output.grid.to_json() {
-                cats.insert(GridCategory::MirroredY);
+            if input.grid.mirrored_cols().to_json() == output.grid.to_json() {
+                cats.insert(MirroredY);
             }
         } else {
             //if (in_dim.0 > 1 || in_dim.1 > 1) && in_dim == out_dim {
             if in_dim.0 == out_dim.0 && in_dim.1 == out_dim.1 {
-                cats.insert(GridCategory::InOutSameSize);
+                cats.insert(InOutSameSize);
             }
             if in_dim.0 > 1 && out_dim.0 > 1 && in_dim.0 == in_dim.1 && out_dim.0 == out_dim.1 {
-                cats.insert(GridCategory::InOutSquare);
+                cats.insert(InOutSquare);
             } else if in_dim.0 > 1 && in_dim.0 == in_dim.1 {
-                cats.insert(GridCategory::InSquare);
+                cats.insert(InSquare);
             } else if out_dim.0 > 1 && out_dim.0 == out_dim.1 {
-                cats.insert(GridCategory::OutSquare);
+                cats.insert(OutSquare);
             }
         }
         if out_dim.0 == 1 && out_dim.1 == 1 {
-            cats.insert(GridCategory::SinglePixelOut);
+            cats.insert(SinglePixelOut);
         }
         if in_dim.0 >= out_dim.0 && in_dim.1 > out_dim.1 || in_dim.0 > out_dim.0 && in_dim.1 >= out_dim.1 {
-            cats.insert(GridCategory::OutLessThanIn);
+            cats.insert(OutLessThanIn);
         } else if in_dim.0 <= out_dim.0 && in_dim.1 < out_dim.1 || in_dim.0 < out_dim.0 && in_dim.1 <= out_dim.1 {
-            cats.insert(GridCategory::InLessThanOut);
+            cats.insert(InLessThanOut);
         }
-        if input.grid.is_symmetric() {
-            cats.insert(GridCategory::SymmetricIn);
+        let is_mirror_rows_in = input.grid.is_mirror_rows();
+        let is_mirror_cols_in = input.grid.is_mirror_cols();
+        let is_mirror_rows_out = output.grid.is_mirror_rows();
+        let is_mirror_cols_out = output.grid.is_mirror_cols();
+        if is_mirror_rows_in && is_mirror_cols_in {
+            cats.insert(SymmetricIn);
+        } else if is_mirror_rows_in {
+            cats.insert(SymmetricInUD);
+        } else if is_mirror_cols_in {
+            cats.insert(SymmetricInLR);
         }
-        if output.grid.is_symmetric() {
-            cats.insert(GridCategory::SymmetricOut);
+        if is_mirror_rows_out && is_mirror_cols_out {
+            cats.insert(SymmetricOut);
+        } else if is_mirror_rows_out {
+            cats.insert(SymmetricOutUD);
+        } else if is_mirror_cols_out {
+            cats.insert(SymmetricOutLR);
         }
 
-        let in_is_mirror_x = input.grid.is_mirror_x();
-        let in_is_mirror_y = input.grid.is_mirror_y();
-        let out_is_mirror_x = output.grid.is_mirror_x();
-        let out_is_mirror_y = output.grid.is_mirror_y();
+        let in_is_mirror_x = input.grid.is_mirror_rows();
+        let in_is_mirror_y = input.grid.is_mirror_cols();
+        let out_is_mirror_x = output.grid.is_mirror_rows();
+        let out_is_mirror_y = output.grid.is_mirror_cols();
         if in_is_mirror_x {
-            cats.insert(GridCategory::MirrorXIn);
+            cats.insert(MirrorXIn);
         }
         if in_is_mirror_y {
-            cats.insert(GridCategory::MirrorYIn);
+            cats.insert(MirrorYIn);
         }
         if out_is_mirror_x {
-            cats.insert(GridCategory::MirrorXOut);
+            cats.insert(MirrorXOut);
         }
         if out_is_mirror_y {
-            cats.insert(GridCategory::MirrorYOut);
+            cats.insert(MirrorYOut);
         }
         /*
         if input.grid_likelyhood() > 0.5 {
-            cats.insert(GridCategory::GridLikelyhood);
+            cats.insert(GridLikelyhood);
         }
         if input.is_mirror_offset_x(-1) {
-            cats.insert(GridCategory::MirrorXInSkewR);  // FIX
+            cats.insert(MirrorXInSkewR);  // FIX
         }
         if input.is_mirror_offset_x(1) {
-            cats.insert(GridCategory::MirrorXInSkewL);
+            cats.insert(MirrorXInSkewL);
         }
         if output.is_mirror_offset_x(-1) {
-            cats.insert(GridCategory::MirrorXOutSkewR);
+            cats.insert(MirrorXOutSkewR);
         }
         if output.is_mirror_offset_x(1) {
-            cats.insert(GridCategory::MirrorXOutSkewL);
+            cats.insert(MirrorXOutSkewL);
         }
         if input.is_mirror_offset_y(-1) {
-            cats.insert(GridCategory::MirrorYInSkewR);
+            cats.insert(MirrorYInSkewR);
         }
         if input.is_mirror_offset_y(1) {
-            cats.insert(GridCategory::MirrorYInSkewL);
+            cats.insert(MirrorYInSkewL);
         }
         if output.is_mirror_offset_y(-1) {
-            cats.insert(GridCategory::MirrorYOutSkewR);
+            cats.insert(MirrorYOutSkewR);
         }
         if output.is_mirror_offset_y(1) {
-            cats.insert(GridCategory::MirrorYOutSkewL);
+            cats.insert(MirrorYOutSkewL);
         }
         */
-        if input.grid.has_bg_grid() != Colour::NoColour {
-            cats.insert(GridCategory::BGGridInBlack);
+        if input.grid.has_bg_grid() != NoColour {
+            cats.insert(BGGridInBlack);
         }
-        if output.grid.has_bg_grid() != Colour::NoColour {
-            cats.insert(GridCategory::BGGridOutBlack);
+        if output.grid.has_bg_grid() != NoColour {
+            cats.insert(BGGridOutBlack);
         }
-        if input.grid.has_bg_grid_coloured() != Colour::NoColour {
-            cats.insert(GridCategory::BGGridInColoured);
+        if input.grid.has_bg_grid_coloured() != NoColour {
+            cats.insert(BGGridInColoured);
         }
-        if output.grid.has_bg_grid_coloured() != Colour::NoColour {
-            cats.insert(GridCategory::BGGridOutColoured);
+        if output.grid.has_bg_grid_coloured() != NoColour {
+            cats.insert(BGGridOutColoured);
         }
-        if input.grid.is_panelled_x() {
-            cats.insert(GridCategory::IsPanelledXIn);
+        if input.grid.is_panelled_rows() {
+            cats.insert(IsPanelledXIn);
         }
-        if output.grid.is_panelled_x() {
-            cats.insert(GridCategory::IsPanelledXOut);
+        if output.grid.is_panelled_rows() {
+            cats.insert(IsPanelledXOut);
         }
-        if input.grid.is_panelled_y() {
-            cats.insert(GridCategory::IsPanelledYIn);
+        if input.grid.is_panelled_cols() {
+            cats.insert(IsPanelledYIn);
         }
-        if output.grid.is_panelled_y() {
-            cats.insert(GridCategory::IsPanelledYOut);
+        if output.grid.is_panelled_cols() {
+            cats.insert(IsPanelledYOut);
         }
         let in_no_colours = input.grid.no_colours();
         let out_no_colours = output.grid.no_colours();
         if in_no_colours == 0 {
-            cats.insert(GridCategory::BlankIn);
+            cats.insert(BlankIn);
         }
         if out_no_colours == 0 {
-            cats.insert(GridCategory::BlankOut);
+            cats.insert(BlankOut);
         }
         if in_no_colours == 1 {
-            cats.insert(GridCategory::SingleColourIn);
+            cats.insert(SingleColourIn);
         }
         if out_no_colours == 1 {
-            cats.insert(GridCategory::SingleColourOut);
+            cats.insert(SingleColourOut);
         }
-        if input.grid.colour == output.grid.colour && input.grid.colour != Colour::Mixed {
-            cats.insert(GridCategory::SameColour);
+        if input.grid.colour == output.grid.colour && input.grid.colour != Mixed {
+            cats.insert(SameColour);
         }
 /*
 //eprintln!("{}", output.shapes.len());
@@ -258,48 +300,48 @@ impl Example {
 eprintln!("{h:?} {}", h.iter().filter(|(_,&v)| v == 1 || v == 4).count());
             if h.len() == 2 && h.iter().filter(|(_,&v)| v == 1 || v == 4).count() == 2 {
 eprintln!("here");
-                cats.insert(GridCategory::SurroundOut);
+                cats.insert(SurroundOut);
             }; 
         }
 */
         if input.shapes.len() == 1 {
-            cats.insert(GridCategory::SingleShapeIn);
+            cats.insert(SingleShapeIn);
         } else if input.coloured_shapes.len() == 1 {
-            cats.insert(GridCategory::SingleColouredShapeIn);
+            cats.insert(SingleColouredShapeIn);
         }
         if output.shapes.len() == 1 {
-            cats.insert(GridCategory::SingleShapeOut);
+            cats.insert(SingleShapeOut);
         } else if output.coloured_shapes.len() == 1 {
-            cats.insert(GridCategory::SingleColouredShapeOut);
+            cats.insert(SingleColouredShapeOut);
         }
         if input.shapes.len() > 1 && input.shapes.len() == output.shapes.len() {
-            cats.insert(GridCategory::InSameCountOut);
+            cats.insert(InSameCountOut);
         } else if input.shapes.len() > 1 && input.coloured_shapes.len() == output.coloured_shapes.len() {
-            cats.insert(GridCategory::InSameCountOutColoured);
+            cats.insert(InSameCountOutColoured);
         } else if input.shapes.len() < output.shapes.len() {
-            cats.insert(GridCategory::InLessCountOut);
+            cats.insert(InLessCountOut);
         } else if input.coloured_shapes.len() < output.coloured_shapes.len() {
-            cats.insert(GridCategory::InLessCountOutColoured);
+            cats.insert(InLessCountOutColoured);
         } else if input.shapes.len() < output.shapes.len() {
-            cats.insert(GridCategory::OutLessCountIn);
+            cats.insert(OutLessCountIn);
         } else if input.coloured_shapes.len() > output.coloured_shapes.len() {
-            cats.insert(GridCategory::OutLessCountInColoured);
+            cats.insert(OutLessCountInColoured);
         }
         let in_border_top = input.grid.border_top();
         let in_border_bottom = input.grid.border_bottom();
         let in_border_left = input.grid.border_left();
         let in_border_right = input.grid.border_right();
         if in_border_top {
-            cats.insert(GridCategory::BorderTopIn);
+            cats.insert(BorderTopIn);
         }
         if in_border_bottom {
-            cats.insert(GridCategory::BorderBottomIn);
+            cats.insert(BorderBottomIn);
         }
         if in_border_left {
-            cats.insert(GridCategory::BorderLeftIn);
+            cats.insert(BorderLeftIn);
         }
         if in_border_right {
-            cats.insert(GridCategory::BorderRightIn);
+            cats.insert(BorderRightIn);
         }
         if output.grid.size() > 0 {
             let out_border_top = output.grid.border_top();
@@ -307,111 +349,137 @@ eprintln!("here");
             let out_border_left = output.grid.border_left();
             let out_border_right = output.grid.border_right();
             if out_border_top {
-                cats.insert(GridCategory::BorderTopOut);
+                cats.insert(BorderTopOut);
             }
             if out_border_bottom {
-                cats.insert(GridCategory::BorderBottomOut);
+                cats.insert(BorderBottomOut);
             }
             if out_border_left {
-                cats.insert(GridCategory::BorderLeftOut);
+                cats.insert(BorderLeftOut);
             }
             if out_border_right {
-                cats.insert(GridCategory::BorderRightOut);
+                cats.insert(BorderRightOut);
             }
         }
         if input.grid.even_rows() {
-            cats.insert(GridCategory::EvenRowsIn);
+            cats.insert(EvenRowsIn);
         }
         if output.grid.even_rows() {
-            cats.insert(GridCategory::EvenRowsOut);
+            cats.insert(EvenRowsOut);
         }
         if input.grid.is_full() {
-            cats.insert(GridCategory::FullyPopulatedIn);
+            cats.insert(FullyPopulatedIn);
         }
         if output.grid.is_full() {
-            cats.insert(GridCategory::FullyPopulatedOut);
+            cats.insert(FullyPopulatedOut);
         }
         if !input.grid.has_gravity_down() && output.grid.has_gravity_down() {
-            cats.insert(GridCategory::GravityDown);
+            cats.insert(GravityDown);
         } else if !input.grid.has_gravity_up() && output.grid.has_gravity_up() {
-            cats.insert(GridCategory::GravityUp);
+            cats.insert(GravityUp);
         } else if !input.grid.has_gravity_left() && output.grid.has_gravity_left() {
-            cats.insert(GridCategory::GravityLeft);
+            cats.insert(GravityLeft);
         } else if !input.grid.has_gravity_right() && output.grid.has_gravity_right() {
-            cats.insert(GridCategory::GravityRight);
+            cats.insert(GravityRight);
         }
         if input.grid.is_3x3() {
-            cats.insert(GridCategory::Is3x3In);
+            cats.insert(Is3x3In);
         }
         if output.grid.is_3x3() {
-            cats.insert(GridCategory::Is3x3Out);
+            cats.insert(Is3x3Out);
         }
         if input.grid.div9() {
-            cats.insert(GridCategory::Div9In);
+            cats.insert(Div9In);
         }
         if output.grid.div9() {
-            cats.insert(GridCategory::Div9Out);
+            cats.insert(Div9Out);
         }
         if in_dim.0 * 2 == out_dim.0 && in_dim.1 * 2 == out_dim.1 {
-            cats.insert(GridCategory::Double);
+            cats.insert(Double);
         }
         if input.shapes.shapes.len() == output.shapes.shapes.len() {
-            cats.insert(GridCategory::InOutShapeCount);
+            cats.insert(InOutShapeCount);
         }
         if input.shapes.coloured_shapes.len() == output.coloured_shapes.shapes.len() {
-            cats.insert(GridCategory::InOutShapeCountColoured);
+            cats.insert(InOutShapeCountColoured);
         }
         if !input.black.shapes.is_empty() {
-            cats.insert(GridCategory::BlackPatches);
+            cats.insert(BlackPatches);
         }
         if input.has_bg_shape() && output.has_bg_shape() {
-            cats.insert(GridCategory::HasBGShape);
+            cats.insert(HasBGShape);
         }
         if input.has_bg_coloured_shape() && output.has_bg_coloured_shape() {
-            cats.insert(GridCategory::HasBGShapeColoured);
+            cats.insert(HasBGShapeColoured);
         }
         let hin = input.grid.cell_colour_cnt_map();
         let hout = output.grid.cell_colour_cnt_map();
         if hin == hout {
-            cats.insert(GridCategory::IdenticalColours);
+            cats.insert(IdenticalColours);
         } else if hin.len() == hout.len() {
-            cats.insert(GridCategory::IdenticalNoColours);
+            cats.insert(IdenticalNoColours);
         } else {
             let inp: usize = hin.values().sum();
             let outp: usize = hout.values().sum();
 
             if inp == outp {
-                cats.insert(GridCategory::IdenticalNoPixels);
+                cats.insert(IdenticalNoPixels);
             }
         }
+        let hin_colours: usize = hin.values().sum();
+        let hout_colours: usize = hout.values().sum();
+        if hin.len() == 1 {
+            cats.insert(SingleColourCountIn(hin_colours));
+        }
+        if hout.len() == 1 {
+            cats.insert(SingleColourCountOut(hout_colours));
+        }
+        if hin_colours == hout_colours * 2 {
+            cats.insert(SingleColourIn2xOut);
+        }
+        if hin_colours == hout_colours * 4 {
+            cats.insert(SingleColourIn2xOut);
+        }
+        if hin_colours * 2 == hout_colours {
+            cats.insert(SingleColourOut2xIn);
+        }
+        if hin_colours * 4 == hout_colours {
+            cats.insert(SingleColourOut2xIn);
+        }
         if output.grid.is_diag_origin() {
-            cats.insert(GridCategory::DiagonalOutOrigin);
+            cats.insert(DiagonalOutOrigin);
         } else if output.grid.is_diag_not_origin() {
-            cats.insert(GridCategory::DiagonalOutNotOrigin);
+            cats.insert(DiagonalOutNotOrigin);
         }
-        if input.grid.colour == Colour::Mixed {
-            cats.insert(GridCategory::NoColouredShapesIn(input.coloured_shapes.len()));
+        if input.grid.colour == Mixed {
+            cats.insert(NoColouredShapesIn(input.coloured_shapes.len()));
         }
-        if output.grid.colour == Colour::Mixed {
-            cats.insert(GridCategory::NoColouredShapesOut(output.coloured_shapes.len()));
+        if output.grid.colour == Mixed {
+            cats.insert(NoColouredShapesOut(output.coloured_shapes.len()));
         }
         if input.shapes.overlay_shapes_same_colour() {
-            cats.insert(GridCategory::OverlayInSame);
+            cats.insert(OverlayInSame);
         }
         if output.shapes.overlay_shapes_same_colour() {
-            cats.insert(GridCategory::OverlayOutSame);
+            cats.insert(OverlayOutSame);
         }
         if input.shapes.overlay_shapes_diff_colour() {
-            cats.insert(GridCategory::OverlayInDiff);
+            cats.insert(OverlayInDiff);
         }
         if output.shapes.overlay_shapes_diff_colour() {
-            cats.insert(GridCategory::OverlayOutDiff);
+            cats.insert(OverlayOutDiff);
         }
-        cats.insert(GridCategory::NoShapesIn(input.shapes.len()));
-        cats.insert(GridCategory::NoShapesOut(output.shapes.len()));
+        if input.shapes.len() == 1 && input.shapes.shapes[0].is_line() {
+            cats.insert(InLine);
+        }
+        if output.shapes.len() == 1 && output.shapes.shapes[0].is_line() {
+            cats.insert(OutLine);
+        }
+        cats.insert(NoShapesIn(input.shapes.len()));
+        cats.insert(NoShapesOut(output.shapes.len()));
         if input.shapes.is_square_same() {
-            cats.insert(GridCategory::SquareShapeSide(input.shapes.shapes[0].cells.rows));
-            cats.insert(GridCategory::SquareShapeSize(input.shapes.shapes[0].size()));
+            cats.insert(SquareShapeSide(input.shapes.shapes[0].cells.rows));
+            cats.insert(SquareShapeSize(input.shapes.shapes[0].size()));
         }
         let mut cc = input.shapes.colour_cnt();
         if cc.len() == 2 {
@@ -426,8 +494,8 @@ eprintln!("here");
                 0
             };
 
-            cats.insert(GridCategory::ShapeMinCntIn(first.min(second)));
-            cats.insert(GridCategory::ShapeMaxCntIn(first.max(second)));
+            cats.insert(ShapeMinCntIn(first.min(second)));
+            cats.insert(ShapeMaxCntIn(first.max(second)));
         }
         let mut cc = output.shapes.colour_cnt();
         if cc.len() == 2 {
@@ -442,8 +510,8 @@ eprintln!("here");
                 0
             };
 
-            cats.insert(GridCategory::ShapeMinCntOut(first.min(second)));
-            cats.insert(GridCategory::ShapeMaxCntOut(first.max(second)));
+            cats.insert(ShapeMinCntOut(first.min(second)));
+            cats.insert(ShapeMaxCntOut(first.max(second)));
         }
 
         cats
@@ -502,6 +570,34 @@ impl Examples {
         Examples { examples, tests, cat }
     }
 
+    pub fn transformation(&self, trans: Transformation) -> Self {
+        let mut examples = self.clone();
+
+        examples.transformation_mut(trans);
+
+        examples
+    }
+
+    pub fn transformation_mut(&mut self, trans: Transformation) {
+        self.examples.iter_mut().for_each(|ex| ex.transform_mut(trans, true));
+        //self.tests.iter_mut().for_each(|ex| ex.transform_mut(trans, false));
+        //self.tests.iter_mut().for_each(|ex| Example::categorise_grid(&ex.input, &ex.output));
+    }
+
+    pub fn inverse_transformation(&self, trans: Transformation) -> Self {
+        let mut examples = self.clone();
+
+        examples.inverse_transformation_mut(trans);
+
+        examples
+    }
+
+    pub fn inverse_transformation_mut(&mut self, trans: Transformation) {
+        let trans = Transformation::inverse(&trans);
+
+        self.transformation(trans);
+    } 
+
     pub fn match_shapes(&self) -> BTreeMap<Shape, Shape> {
         let mut mapping: BTreeMap<Shape, Shape> = BTreeMap::new();
 
@@ -525,28 +621,28 @@ impl Examples {
         for ex in examples.iter_mut() {
             let cat = Example::categorise_grid(&ex.input, &ex.output);
 
-            if cat.contains(&GridCategory::InOutSquareSameSize) {
-                extra.insert(GridCategory::InOutSameSize);
+            if cat.contains(&InOutSquareSameSize) {
+                extra.insert(InOutSameSize);
             }
-            if cat.contains(&GridCategory::OverlayInSame) {
-                extra.insert(GridCategory::OverlayInSame);
+            if cat.contains(&OverlayInSame) {
+                extra.insert(OverlayInSame);
             }
-            if cat.contains(&GridCategory::OverlayOutSame) {
-                extra.insert(GridCategory::OverlayOutSame);
+            if cat.contains(&OverlayOutSame) {
+                extra.insert(OverlayOutSame);
             }
-            if cat.contains(&GridCategory::OverlayInDiff) {
-                extra.insert(GridCategory::OverlayInDiff);
+            if cat.contains(&OverlayInDiff) {
+                extra.insert(OverlayInDiff);
             }
-            if cat.contains(&GridCategory::OverlayOutDiff) {
-                extra.insert(GridCategory::OverlayOutDiff);
+            if cat.contains(&OverlayOutDiff) {
+                extra.insert(OverlayOutDiff);
             }
             ex.pairs = ex.input.shapes.pair_shapes(&ex.output.shapes, true);
             if !ex.pairs.is_empty() {
-                extra.insert(GridCategory::InOutSameShapes);
+                extra.insert(InOutSameShapes);
             }
             ex.coloured_pairs = ex.input.coloured_shapes.pair_shapes(&ex.output.coloured_shapes, true);
             if !ex.coloured_pairs.is_empty() {
-                extra.insert(GridCategory::InOutSameShapesColoured);
+                extra.insert(InOutSameShapesColoured);
             }
 
             if cats.is_empty() {
@@ -556,8 +652,8 @@ impl Examples {
             }
         }
 
-        if cats.contains(&GridCategory::InOutSquareSameSize) && cats.contains(&GridCategory::InOutSameSize) {
-            cats.remove(&GridCategory::InOutSameSize);
+        if cats.contains(&InOutSquareSameSize) && cats.contains(&InOutSameSize) {
+            cats.remove(&InOutSameSize);
         }
 
         cats = cats.union(&extra).cloned().collect();
@@ -622,15 +718,15 @@ impl Examples {
     }
 
     pub fn largest_shape_colour(&self) -> Colour {
-        let mut colour = Colour::NoColour;
+        let mut colour = NoColour;
 
         for ex in self.examples.iter() {
             let s = ex.output.shapes.largest();
 
-            if colour == Colour::NoColour {
+            if colour == NoColour {
                 colour = s.colour;
             } else if colour != s.colour {
-                return Colour::NoColour;    // No common large colour
+                return NoColour;    // No common large colour
             }
         }
 
