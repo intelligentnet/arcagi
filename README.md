@@ -5,7 +5,9 @@ WARNING:
 -----
 This code is messy and imcomplete and is likely to change rapidly. At the
 moment it is a set of experiments to guage what works well and what does not.
-It is perhaps 20% complete and will answer just over 10% of the examples given.
+It is perhaps 20% complete and will answer about 20% of the examples given.
+
+If you use this code as part of a Kaggle submission, or in any other way, then please give credit where credit is due.
 
 Background
 ----------
@@ -33,6 +35,7 @@ size of the search space.
 This is a pure Symbolic AI approach and hence is deterministic. There may be a
 place for an LLM/Gen-AI in object recognition and/or generating candidate
 solutions.
+
 It was hoped that the author's previous experience of LLMs (see LLMClient),
 would help (for code generation). It might eventually, for now there is
 plenty to explore with the current Symbolic approach.
@@ -62,6 +65,9 @@ a = rust.test();
 print(a)
 ```
 
+If you wish to use this for a Kaggle submission, then please ask the author
+who will be happy to share a Kaggle shared object. Credit is expected of course..
+
 NOTE
 ----
 
@@ -69,3 +75,10 @@ To compile the above for kaggle a docker image needs to be created and the .so
 file uploaded and referenced, somewhat tedious. It will run locally for public
 data test with cargo as normal. A release version should run in less that a
 second on most machines, this will change as more cases are completed.
+
+22 December 2024 - After o3 'Success'
+-------------------------------------
+
+The three o3 unsolved uzzles are solved by this implementation. c6e1b8da, 0d87d2a6 and b457fec5.
+
+I'm not happy with 0d87d2a6 as the extending arm should only change other shapes it crosses, if and only if it goes through them, not a near miss. That's the 'best' human interpretation! I appreciate 2 attempts are allowed, though I don't think that should be necessary, the interpretation should be deterministic given the experimental examples!!! Humans solve IQ tests analytically, not by thinking, 'Ah, this is ambiguous, these are the choices'. Or guessing, though as a last resort we have all done that, but it's not repeatable and not appropriate here!  Can we remove this 2 guess approach please for version 2.

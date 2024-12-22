@@ -65,11 +65,11 @@ pub enum Colour {
     OrigOrange = 57,
     OrigTeal = 58,
     OrigBrown = 59,
-    NoColour = 100,
-    Mixed = 101,
-    Transparent = 102,
-    DiffShape = 103,    // Naughty overlading of enum
-    Same = 104,         // Naughty overlading of enum
+    NoColour = 90,
+    Mixed = 91,
+    Transparent = 92,
+    DiffShape = 93,    // Naughty overlading of enum
+    Same = 94,         // Naughty overlading of enum
 }
 
 impl Colour {
@@ -139,11 +139,11 @@ impl Colour {
             57 => Self::OrigOrange,
             58 => Self::OrigTeal,
             59 => Self::OrigBrown,
-            100 => Self::NoColour,
-            101 => Self::Mixed,
-            102 => Self::Transparent,
-            103 => Self::DiffShape,    // Naughty overlading of enum
-            104 => Self::Same,         // Naughty overlading of enum
+            90 => Self::NoColour,
+            91 => Self::Mixed,
+            92 => Self::Transparent,
+            93 => Self::DiffShape,    // Naughty overlading of enum
+            94 => Self::Same,         // Naughty overlading of enum
             _ => todo!()
         }
     }
@@ -210,11 +210,11 @@ impl Colour {
             Self::OrigOrange => 57,
             Self::OrigTeal => 58,
             Self::OrigBrown => 59,
-            Self::NoColour => 100,
-            Self::Mixed => 101,
-            Self::Transparent => 102,    // Naughty overlading of enum
-            Self::DiffShape => 103,    // Naughty overlading of enum
-            Self::Same => 104,         // Naughty overlading of enum
+            Self::NoColour => 90,
+            Self::Mixed => 91,
+            Self::Transparent => 92,    // Naughty overlading of enum
+            Self::DiffShape => 93,    // Naughty overlading of enum
+            Self::Same => 94,         // Naughty overlading of enum
             //_ => todo!()
         }
     }
@@ -228,7 +228,7 @@ impl Colour {
     }
 
     pub fn is_colour(self) -> bool {
-        self == Self::Same || Self::to_usize(self) < 100
+        self == Self::Same || self < Self::NoColour
     }
 
     pub fn colours() -> Vec<Self> {
@@ -244,19 +244,19 @@ impl Colour {
     }
 
     pub fn is_from(&self) -> bool {
-        *self > Self::FromBlack && *self <= Self::FromBrown
+        *self >= Self::FromBlack && *self <= Self::FromBrown
     }
 
     pub fn is_same(&self) -> bool {
-        *self > Self::SameBlack && *self <= Self::SameBrown
+        *self >= Self::SameBlack && *self <= Self::SameBrown
     }
 
     pub fn is_diff(&self) -> bool {
-        *self > Self::DiffBlack && *self <= Self::DiffBrown
+        *self >= Self::DiffBlack && *self <= Self::DiffBrown
     }
 
     pub fn is_orig(&self) -> bool {
-        *self > Self::OrigBlack && *self <= Self::OrigBrown
+        *self >= Self::OrigBlack && *self <= Self::OrigBrown
     }
 
     pub fn single_colour_vec(v: &[Self]) -> bool {
@@ -309,6 +309,8 @@ pub enum GridCategory {
     MirrorXOutSkewR,
     MirrorYOutSkewR,
     */
+    BareCornersIn,
+    BareCornersOut,
     BGGridInBlack,
     BGGridInColoured,
     BGGridOutBlack,
@@ -329,6 +331,7 @@ pub enum GridCategory {
     Div9In,
     Div9Out,
     Double,
+    CatchAll,
     EmptyOutput,
     EvenRowsIn,
     EvenRowsOut,
@@ -362,7 +365,10 @@ pub enum GridCategory {
     InSameCountOutColoured,
     InSameSize,
     InSquare,
+    InToSquaredOut,
     InvTranspose,
+    InXOutHeight(usize),
+    InXOutWidth(usize),
     Is3x3In,
     Is3x3Out,
     IsPanelledXIn,
@@ -381,6 +387,10 @@ pub enum GridCategory {
     NoColouredShapesOut(usize),
     NoShapesIn(usize),
     NoShapesOut(usize),
+    NxNIn(usize),
+    NxNOut(usize),
+    OutXInHeight(usize),
+    OutXInWidth(usize),
     OutLessCountIn,
     OutLessCountInColoured,
     OutLessThanIn,
@@ -681,21 +691,48 @@ pub enum DiffStates<'a> {
 }
 */
 
-#[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum CellCategory {
     CornerTL,
     CornerTR,
     CornerBL,
     CornerBR,
+    InsideCornerTL,
+    InsideCornerTR,
+    InsideCornerBL,
+    InsideCornerBR,
     InternalCornerTL,
     InternalCornerTR,
     InternalCornerBL,
     InternalCornerBR,
+    InternalEdgeT,
+    InternalEdgeB,
+    InternalEdgeL,
+    InternalEdgeR,
     EdgeT,
     EdgeB,
     EdgeL,
     EdgeR,
+    TopEdgeT,
+    TopEdgeB,
+    TopEdgeL,
+    TopEdgeR,
+    BottomEdgeT,
+    BottomEdgeB,
+    BottomEdgeL,
+    BottomEdgeR,
+    LeftEdgeT,
+    LeftEdgeB,
+    LeftEdgeL,
+    LeftEdgeR,
+    RightEdgeT,
+    RightEdgeB,
+    RightEdgeL,
+    RightEdgeR,
+    HollowEdgeT,
+    HollowEdgeB,
+    HollowEdgeL,
+    HollowEdgeR,
     PointT,
     PointB,
     PointL,
@@ -704,8 +741,43 @@ pub enum CellCategory {
     //DiagTR,
     //DiagBL,
     //DiagBR,
-    StemTB,
-    StemLR,
+    LineTB,
+    LineLR,
+    MiddleTB,
+    MiddleLR,
     Middle,
+    Single,
+    SingleT,
+    SingleB,
+    SingleL,
+    SingleR,
+    Unknown,
+    StemLR,
+    StemTB,
     BG,
+}
+
+impl CellCategory {
+    pub fn edge_corner(self) -> bool {
+        self >= Self::CornerTL && self <= Self::CornerBR
+    }
+
+    pub fn internal_corner(self) -> bool {
+        self >= Self::InternalCornerTL && self <= Self::InternalCornerBR
+    }
+
+    pub fn inside_corner(self) -> bool {
+        self >= Self::InsideCornerTL && self <= Self::InsideCornerBR
+    }
+
+    pub fn outer_corner(self) -> bool {
+        self.edge_corner() || self.internal_corner()
+    }
+
+    pub fn has_point(self) -> bool {
+        match self {
+            Self::PointT | Self::PointB | Self::PointL | Self::PointR => true,
+            _ => false,
+        }
+    }
 }

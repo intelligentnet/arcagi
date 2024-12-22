@@ -46,19 +46,6 @@ pub fn mirror_only(grid: &Grid, n: &mut usize) -> Grid {
     }
 }
 
-// Experiments on gravity
-pub fn dup_only(grid: &Grid, n: &mut usize) -> Grid {
-    let func = [Grid::dup_right, Grid::dup_left, Grid::dup_down, Grid::dup_up];
-    if *n == usize::MAX {
-        *n = func.len();
-    }
-    if *n == 0 {
-        Grid::trivial()
-    } else {
-        func[func.len() - *n](grid)
-    }
-}
-
 /*
 pub fn gravity_only(grid: &Grid, n: &mut usize) -> Grid {
     let func = [&Grid::stretch_down, &Grid::gravity_down, &Grid::gravity_up];

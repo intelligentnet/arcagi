@@ -1,4 +1,5 @@
 use std::collections::{HashMap, BTreeMap, BTreeSet};
+use array_tool::vec::{Uniq, Union};
 use crate::cats::*;
 use crate::cats::Colour::*;
 use crate::cats::GridCategory::*;
@@ -167,17 +168,33 @@ impl Example {
                 cats.insert(MirroredY);
             }
         } else {
-            //if (in_dim.0 > 1 || in_dim.1 > 1) && in_dim == out_dim {
             if in_dim.0 == out_dim.0 && in_dim.1 == out_dim.1 {
                 cats.insert(InOutSameSize);
             }
             if in_dim.0 > 1 && out_dim.0 > 1 && in_dim.0 == in_dim.1 && out_dim.0 == out_dim.1 {
                 cats.insert(InOutSquare);
+                cats.insert(NxNIn(in_dim.0));
+                cats.insert(NxNOut(out_dim.0));
+                if in_dim.0 * in_dim.0 == out_dim.0 {
+                    cats.insert(InToSquaredOut);
+                }
             } else if in_dim.0 > 1 && in_dim.0 == in_dim.1 {
                 cats.insert(InSquare);
+                cats.insert(NxNIn(in_dim.0));
             } else if out_dim.0 > 1 && out_dim.0 == out_dim.1 {
                 cats.insert(OutSquare);
+                cats.insert(NxNOut(out_dim.0));
             }
+        }
+        if in_dim.0 % out_dim.0 == 0 && in_dim.0 != out_dim.0 {
+            cats.insert(OutXInWidth(in_dim.0 / out_dim.0));
+        } else if in_dim.0 % out_dim.0 == 0 && in_dim.0 != out_dim.0 {
+            cats.insert(OutXInHeight(in_dim.1 / out_dim.1));
+        }
+        if out_dim.0 % in_dim.0 == 0 && out_dim.0 != in_dim.0 {
+            cats.insert(InXOutWidth(out_dim.0 / in_dim.0));
+        } else if out_dim.0 % in_dim.0 == 0 && out_dim.0 != in_dim.0 {
+            cats.insert(InXOutHeight(out_dim.1 / in_dim.1));
         }
         if out_dim.0 == 1 && out_dim.1 == 1 {
             cats.insert(SinglePixelOut);
@@ -251,10 +268,10 @@ impl Example {
             cats.insert(MirrorYOutSkewL);
         }
         */
-        if input.grid.has_bg_grid() != NoColour {
+        if input.grid.has_bg_grid() == Black {
             cats.insert(BGGridInBlack);
         }
-        if output.grid.has_bg_grid() != NoColour {
+        if output.grid.has_bg_grid() == Black {
             cats.insert(BGGridOutBlack);
         }
         if input.grid.has_bg_grid_coloured() != NoColour {
@@ -369,9 +386,13 @@ eprintln!("here");
         }
         if input.grid.is_full() {
             cats.insert(FullyPopulatedIn);
+        } else if input.shapes.shapes.len() == 1 && input.shapes.shapes[0].bare_corners() {
+            cats.insert(BareCornersIn);
         }
         if output.grid.is_full() {
             cats.insert(FullyPopulatedOut);
+        } else if output.shapes.shapes.len() == 1 && output.shapes.shapes[0].bare_corners() {
+            cats.insert(BareCornersOut);
         }
         if !input.grid.has_gravity_down() && output.grid.has_gravity_down() {
             cats.insert(GravityDown);
@@ -532,6 +553,19 @@ eprintln!("here");
     pub fn single_coloured_shape_out(&self) -> usize {
         self.output.coloured_shapes.len()
     }
+
+    pub fn io_colour_diff(&self) -> Colour {
+        let in_colours = self.input.grid.cell_colour_cnt_map();
+        let out_colours = self.output.grid.cell_colour_cnt_map();
+
+        let remainder: Vec<_> = out_colours.keys().filter(|k| !in_colours.contains_key(k)).collect();
+
+        if remainder.len() == 1 {
+            *remainder[0]
+        } else {
+            NoColour
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -614,6 +648,92 @@ impl Examples {
         mapping
     }
 
+    pub fn full_shapes(&self, input: bool, sq: bool) -> Shapes {
+        let mut shapes: Vec<Shape> = Vec::new();
+
+        for ex in self.examples.iter() {
+            let ss = if input {
+                &ex.input.shapes
+            } else {
+                &ex.output.shapes
+            };
+
+            let it = if sq {
+                ss.full_shapes()
+            } else {
+                ss.full_shapes_sq()
+            };
+
+            for s in it.iter() {
+                let s = s.to_origin();
+
+                if !shapes.contains(&s) {
+                    shapes.push(s);
+                }
+            }
+        }
+
+        Shapes::new_shapes(&shapes)
+    }
+
+    pub fn full_shapes_in(&self) -> Shapes {
+        self.full_shapes(true, false)
+    }
+
+    pub fn full_shapes_out(&self) -> Shapes {
+        self.full_shapes(false, false)
+    }
+
+    pub fn full_shapes_in_sq(&self) -> Shapes {
+        self.full_shapes(true, true)
+    }
+
+    pub fn full_shapes_out_sq(&self) -> Shapes {
+        self.full_shapes(false, true)
+    }
+
+    pub fn all_shapes(&self, input: bool, sq: bool) -> Shapes {
+        let mut shapes: Vec<Shape> = Vec::new();
+
+        for ex in self.examples.iter() {
+            let ss = if input {
+                &ex.input.shapes
+            } else {
+                &ex.output.shapes
+            };
+
+            let it = if sq {
+                ss.all_shapes()
+            } else {
+                ss.all_shapes_sq()
+            };
+
+            for s in it.iter() {
+                let s = s.to_origin();
+
+                shapes.push(s);
+            }
+        }
+
+        Shapes::new_shapes(&shapes)
+    }
+
+    pub fn all_shapes_in(&self) -> Shapes {
+        self.all_shapes(true, false)
+    }
+
+    pub fn all_shapes_out(&self) -> Shapes {
+        self.all_shapes(false, false)
+    }
+
+    pub fn all_shapes_in_sq(&self) -> Shapes {
+        self.all_shapes(true, true)
+    }
+
+    pub fn all_shapes_out_sq(&self) -> Shapes {
+        self.all_shapes(false, true)
+    }
+
     pub fn categorise_grids(examples: &mut [Example]) -> BTreeSet<GridCategory> {
         let mut cats: BTreeSet<GridCategory> = BTreeSet::new();
         let mut extra: BTreeSet<GridCategory> = BTreeSet::new();
@@ -685,6 +805,75 @@ impl Examples {
         }
 
         Vec::from_iter(common)
+    }
+
+    pub fn find_all_output_colours(&self) -> Vec<Colour> {
+        let mut common = Vec::new();
+
+        for ex in self.examples.iter() {
+            let h = ex.output.grid.cell_colour_cnt_map();
+            let v: Vec<Colour> = h.keys().map(|c| *c).collect();
+
+            common = Union::union(&common, v);
+        }
+
+        Vec::from_iter(common)
+    }
+
+    pub fn find_all_input_colours(&self) -> Vec<Colour> {
+        let mut common = Vec::new();
+
+        for ex in self.examples.iter() {
+            let h = ex.input.grid.cell_colour_cnt_map();
+            let v: Vec<Colour> = h.keys().map(|c| *c).collect();
+
+            common = Union::union(&common, v);
+        }
+
+        Vec::from_iter(common)
+    }
+
+    pub fn io_colour_diff(&self) -> Vec<Colour> {
+        let in_colours = self.find_input_colours();
+        let out_colours = self.find_output_colours();
+
+        Uniq::uniq(&out_colours, in_colours)
+    }
+
+    pub fn io_common_row_colour(&self) -> Colour {
+        let mut colour = NoColour;
+
+        for ex in self.examples.iter() {
+            for (i, o) in ex.input.shapes.shapes.iter().zip(ex.input.shapes.shapes.iter()) {
+                if colour == NoColour && i.orow == o.orow && i.colour == o.colour {
+                    colour = i.colour;
+
+                    break;
+                } else if i.orow == o.orow && i.colour != o.colour {
+                    return NoColour;
+                }
+            }
+        }
+
+        colour
+    }
+
+    pub fn io_common_col_colour(&self) -> Colour {
+        let mut colour = NoColour;
+
+        for ex in self.examples.iter() {
+            for (i, o) in ex.input.shapes.shapes.iter().zip(ex.input.shapes.shapes.iter()) {
+                if colour == NoColour && i.ocol == o.ocol && i.colour == o.colour {
+                    colour = i.colour;
+
+                    break;
+                } else if i.ocol == o.ocol && i.colour != o.colour {
+                    return NoColour;
+                }
+            }
+        }
+
+        colour
     }
 
     pub fn find_hollow_cnt_colour_map(&self) -> BTreeMap<usize, Colour> {

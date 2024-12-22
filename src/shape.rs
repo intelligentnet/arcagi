@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use pathfinding::prelude::Matrix;
 use crate::cats::Colour::*;
 use crate::cats::Direction::*;
+//use crate::cats::CellCategory::*;
 use crate::cats::*;
 use crate::cell::*;
 use crate::grid::*;
@@ -135,7 +136,6 @@ impl Shape {
         Self { orow: 0, ocol: 0, colour: NoColour, cells, cats, io_edges }
     }
 
-/*
     pub fn new9(&self, corners: bool, colour: Colour) -> Self {
         let mut s = if self.orow == 0 && self.ocol == 0 {
             let mut s = Self::new_sized_coloured(2, 2, Transparent);
@@ -211,7 +211,6 @@ impl Shape {
 
         s
     }
-*/
 
     pub fn trivial() -> Self {
         Self::new_empty()
@@ -341,6 +340,39 @@ impl Shape {
         s
     }
 
+    pub fn on_edge(&self, grid: &Grid) -> bool {
+        let r = self.orow;
+        let c = self.ocol;
+        let rs = self.cells.rows - 1;
+        let cs = self.cells.columns - 1;
+        let rl = grid.cells.rows - 1;
+        let cl = grid.cells.columns - 1;
+
+        r == 0 || c == 0 || r + rs == rl || c + cs == cl
+    }
+
+    // extra check for border required
+    pub fn find_same_row(&self, others: &Vec<Self>) -> Self {
+        for s in others.iter() {
+            if self.orow == s.orow && self.ocol < s.ocol {
+                return s.clone();
+            }
+        }
+
+        Self::trivial()
+    }
+
+    // extra check for border required
+    pub fn find_same_col(&self, others: &Vec<Self>) -> Self {
+        for s in others.iter() {
+            if self.orow < s.orow && self.ocol == s.ocol {
+                return s.clone();
+            }
+        }
+
+        Self::trivial()
+    }
+
     pub fn shrink(&self) -> Self {
         self.shrink_any(false)
     }
@@ -407,6 +439,10 @@ impl Shape {
     }
 
     pub fn fill_boundary_colour(&self) -> Self {
+        self.fill_boundary_colour_bg(Black)
+    }
+
+    pub fn fill_boundary_colour_bg(&self, bg: Colour) -> Self {
         if self.colour == Mixed {
             return self.clone();
         }
@@ -414,13 +450,39 @@ impl Shape {
         let mut shape = self.clone();
 
         for ((x, y), c) in self.cells.items() {
-            if c.colour == Black && (x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1) {
+            if c.colour == bg && (x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1) {
                 shape.flood_fill_mut(x, y, NoColour, self.colour);
             }
         }
 
         shape
     }
+
+    /*
+    pub fn fill_boundary_colour_bg(&self, bg: Colour) -> Self {
+        if self.colour == Mixed {
+            return self.clone();
+        }
+
+        let m = Self::fill_boundary_colour_cells(&self.cells, bg);
+
+        Shape::new_cells(&m)
+    }
+
+    fn fill_boundary_colour_cells(cells: &Matrix<Cell>, bg: Colour) -> Matrix<Cell>{
+        let mut m = cells.clone();
+
+        for ((r, c), cell) in m.clone().items() {
+            if cell.colour == bg && (r == 0 || c == 0 || r == m.rows - 1 || c == m.columns - 1) {
+                let reachable = m.bfs_reachable((r, c), false, |i| m[i].colour == bg);
+
+                reachable.iter().for_each(|&i| m[i].colour = NoColour);
+            }
+        }
+
+        m
+    }
+    */
 
     pub fn flood_fill(&self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
         let mut shape = self.clone();
@@ -504,8 +566,8 @@ impl Shape {
             return false;
         }
 
-        for ((sx, sy), (ox, oy)) in self.cells.keys().zip(other.cells.keys()) {
-            if sx != ox || sy != oy {
+        for (((sx, sy), c1), ((ox, oy), c2)) in self.cells.items().zip(other.cells.items()) {
+            if sx != ox || sy != oy || (c1.colour == Black && c2.colour != Black) || (c1.colour != Black && c2.colour == Black) {
                 return false;
             }
         }
@@ -567,10 +629,6 @@ impl Shape {
 
     pub fn subshape(&self, tlx: usize, sx: usize, tly: usize, sy: usize) -> Self {
         self.to_grid().subgrid(tlx, sx, tly, sy).as_shape()
-    }
-
-    pub fn subshape2(&self, tlx: usize, sx: usize, tly: usize, sy: usize) -> Self {
-        self.to_grid().subgrid2(tlx, sx, tly, sy).as_shape()
     }
 
     pub fn id(&self) -> String {
@@ -876,6 +934,7 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
     }
     */
 
+    /*
     pub fn distance_x(&self, other: &Self) -> f32 {
         let tl_dist = self.orow.max(other.orow) - other.orow.min(self.orow);
         let br_dist = self.cells.columns.max(other.cells.columns) - other.cells.columns.min(self.cells.columns);
@@ -889,10 +948,23 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
 
         ((tl_dist * tl_dist + br_dist * br_dist) as f32).sqrt() / 2.0
     }
+    */
 
     pub fn distance(&self, other: &Self) -> f32 {
-        (((self.orow * self.orow + other.ocol * other.ocol) as f32).sqrt() +
-         ((self.cells.columns * self.cells.columns + other.cells.rows * other.cells.rows) as f32).sqrt()) / 2.0
+        let (sr, sc) = self.centre_of_exact();
+        let (or, oc) = other.centre_of_exact();
+        let dor = sr - or;
+        let doc = sc - oc;
+
+        ((dor * dor + doc * doc) as f32).sqrt()
+    }
+
+    pub fn distance_from(&self, row: usize, col: usize) -> f32 {
+        let (sr, sc) = self.centre_of_exact();
+        let dor = sr - row as f32;
+        let doc = sc - col as f32;
+
+        ((dor * dor + doc * doc) as f32).sqrt()
     }
 
     fn is_mirrored(&self, other: &Self, lr: bool) -> bool {
@@ -1880,6 +1952,18 @@ println!("{rows}/{cols} {}/{} {x}/{y} {}/{}", self.cells.rows, self.cells.column
         i
     }
 
+    pub fn bare_corners(&self) -> bool {
+        let rows = self.cells.rows;
+        let cols = self.cells.columns;
+
+        self.cells[(0,0)].colour == Black && self.cells[(rows - 1,cols - 1)].colour == Black || self.cells[(rows - 1,0)].colour == Black && self.cells[(0,cols - 1)].colour == Black
+    }
+
+    // TODO: needs backtracking
+    pub fn fit_shape(&self, _shape: &Self) -> Self {
+        self.clone()
+    }
+
     pub fn to_origin(&self) -> Self {
         self.to_position(0, 0)
     }
@@ -2012,6 +2096,34 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
     }
     */
 
+    pub fn has_arm(&self, limit: usize) -> (Direction, usize) {
+        let bp = self.to_grid().find_black_patches_limit(limit);
+
+        if bp.shapes.len() == 2 {
+            let rows1 = bp.shapes[0].cells.rows;
+            let cols1 = bp.shapes[0].cells.columns;
+            let rows2 = bp.shapes[1].cells.rows;
+            let cols2 = bp.shapes[1].cells.columns;
+
+            if self.cells[(0,0)].colour == Black && self.cells[(self.cells.rows - 1,0)].colour == Black && rows1 + rows2 + 1 == self.cells.rows {
+                (Direction::Left, cols1)
+            } else if self.cells[(0,self.cells.columns - 1)].colour == Black && self.cells[(self.cells.rows - 1,self.cells.columns - 1)].colour == Black && rows1 + rows2 + 1 == self.cells.rows {
+                (Direction::Right, cols1)
+            } else if cols1 + cols2 + 1 == self.cells.columns {
+                if self.cells[(0,0)].colour == Black {
+                    (Direction::Up, rows1)
+                } else {
+                    (Direction::Down, rows1)
+                }
+            } else {
+                (Direction::Other, 0)
+            }
+        } else {
+            (Direction::Other, 0)
+        }
+    }
+
+    /*
     pub fn get_arm(&self) -> (Direction, usize){
         for pat in &self.cats {
             match pat {
@@ -2037,13 +2149,13 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
         match dir {
             Up =>
-                self.subshape2(self.orow, self.cells.rows - distance, self.ocol, self.cells.columns),
+                self.subshape(self.orow, self.cells.rows - distance, self.ocol, self.cells.columns),
             Down => 
-                self.subshape2(self.orow + distance, self.cells.rows - distance, self.ocol, self.cells.columns),
+                self.subshape(self.orow + distance, self.cells.rows - distance, self.ocol, self.cells.columns),
             Left => 
-                self.subshape2(self.orow, self.cells.rows, self.ocol, self.cells.columns - distance),
+                self.subshape(self.orow, self.cells.rows, self.ocol, self.cells.columns - distance),
             Right => 
-                self.subshape2(self.orow + distance, self.cells.rows - distance, self.ocol + distance, self.cells.columns - distance),
+                self.subshape(self.orow + distance, self.cells.rows - distance, self.ocol + distance, self.cells.columns - distance),
             _ => self.clone(),
         }
     }
@@ -2051,48 +2163,48 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
     pub fn has_arm(&self) -> ShapeCategory {
         for ((x, y), c) in self.cells.items() {
             match c.cat {
-                CellCategory::PointT => {
+                PointT => {
                     if self.cells.rows > 1 && self.cells.columns == 1 {
                         return ShapeCategory::VerticalLine;
                     }
                     let mut i = 1;
-                    while x + i < self.cells.rows && self.cells[(x+i,y)].cat == CellCategory::StemTB {
+                    while x + i < self.cells.rows && self.cells[(x+i,y)].cat == InternalEdgeT {
                         i += 1;
                     }
                     if i >= 2 {
                         return ShapeCategory::ArmTop(i)
                     }
                 },
-                CellCategory::PointB => {
+                PointB => {
                     if self.cells.rows > 1 && self.cells.columns == 1 {
                         return ShapeCategory::VerticalLine;
                     }
                     let mut i = 1;
-                    while x < i && self.cells[(x-i,y)].cat == CellCategory::StemTB {
+                    while x < i && self.cells[(x-i,y)].cat == InternalEdgeB {
                         i += 1;
                     }
                     if i >= 2 {
                         return ShapeCategory::ArmBottom(i)
                     }
                 },
-                CellCategory::PointL => {
+                PointL => {
                     if self.cells.rows == 1 && self.cells.columns > 1 {
                         return ShapeCategory::HorizontalLine;
                     }
                     let mut i = 1;
-                    while y + i < self.cells.columns && self.cells[(x,y+i)].cat == CellCategory::StemLR {
+                    while y + i < self.cells.columns && self.cells[(x,y+i)].cat == InternalEdgeL {
                         i += 1;
                     }
                     if i >= 2 {
                         return ShapeCategory::ArmLeft(i)
                     }
                 },
-                CellCategory::PointR => {
+                PointR => {
                     if self.cells.rows == 1 && self.cells.columns > 1 {
                         return ShapeCategory::HorizontalLine;
                     }
                     let mut i = 1;
-                    while y > i && self.cells[(x,y-i)].cat == CellCategory::StemLR {
+                    while y > i && self.cells[(x,y-i)].cat == InternalEdgeR {
                         i += 1;
                     }
                     if i >= 2 {
@@ -2105,6 +2217,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
         ShapeCategory::Other
     }
+    */
 
     /*
     pub fn repeat(&self, x: isize, y: isize) -> Self {
@@ -2262,6 +2375,51 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         true
     }
 
+    pub fn add_border(&self, colour: Colour) -> Self {
+        let shape = if self.orow == 0 && self.ocol == 0 {
+            let mut s = Shape::new_sized_coloured_position(self.orow, self.ocol, self.cells.rows + 1, self.cells.columns + 1, colour);
+
+            for ((r, c), cell) in self.cells.items() {
+                s.cells[(r,c)] = cell.clone(); 
+            }
+
+            s
+        } else if self.orow == 0 {
+            let mut s = Shape::new_sized_coloured_position(self.orow, self.ocol - 1 , self.cells.rows + 1, self.cells.columns + 2, colour);
+
+            for ((r, c), cell) in self.cells.items() {
+                s.cells[(r,c+1)] = cell.clone(); 
+            }
+
+            if s.ocol > 0 { s.ocol -= 1 };
+
+            s
+        } else if self.ocol == 0 {
+            let mut s = Shape::new_sized_coloured_position(self.orow - 1, self.ocol, self.cells.rows + 2, self.cells.columns + 2, colour);
+
+            for ((r, c), cell) in self.cells.items() {
+                s.cells[(r+1,c)] = cell.clone(); 
+            }
+
+            if s.orow > 0 { s.orow -= 1 };
+
+            s
+        } else {
+            let mut s = Shape::new_sized_coloured_position(self.orow - 1, self.ocol - 1, self.cells.rows + 2, self.cells.columns + 2, colour);
+
+            for ((r, c), cell) in self.cells.items() {
+                s.cells[(r+1,c+1)] = cell.clone(); 
+            }
+
+            if s.orow > 0 { s.orow -= 1 };
+            if s.ocol > 0 { s.ocol -= 1 };
+
+            s
+        };
+
+        shape
+    }
+
     pub fn toddle_colour(&self, bg: Colour, fg: Colour) -> Self {
         let s = self.recolour(bg, ToBlack + bg).recolour(fg, bg);
 
@@ -2382,19 +2540,23 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
     }
 
     pub fn find_first_blacks(&self) -> Vec<(usize,usize)> {
+        self.find_first_colours(Black)
+    }
+
+    pub fn find_first_colours(&self, colour: Colour) -> Vec<(usize,usize)> {
         let mut fb: Vec<(usize,usize)> = Vec::new();
-        let mut black = false;
+        let mut bg = false;
         let mut nr = 0;
 
         for ((r, c), cell) in self.cells.items() {
-            if cell.colour == Black {
-                if !black && nr == r {
+            if cell.colour == colour {
+                if !bg && nr == r {
                     fb.push((r,c));
                 }
             } else if c == 0 {
                 nr = r + 1;
             }
-            black = cell.colour == Black;
+            bg = cell.colour == colour;
         }
 
         fb
@@ -2507,6 +2669,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         }
         */
 
+        /*
 //        for _ in 0 .. 2 {
             let arm = self.has_arm();
             if !has_border && arm != ShapeCategory::Other {
@@ -2514,81 +2677,98 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
                 self.cats.insert(arm);
             }
 //        }
+        */
 //println!("{:?}", self.cats);
     }
 
+    /*
+    pub fn outer_cells(cells: &Matrix<Cell>) -> Vec<Cell> {
+        for ((r, c), cell) in cells {
+            if cell.colour 
+        }
+    }
+    */
+
+    pub fn split_2(&self) -> Shapes {
+        self.to_grid().split_2()
+    }
+
     pub fn cell_category(cells: &Matrix<Cell>) -> Matrix<Cell> {
+        Self::cell_category_bg(cells, Black)
+    }
+
+    pub fn cell_category_bg(cells: &Matrix<Cell>, bg: Colour) -> Matrix<Cell> {
         let mut m = cells.clone();
 
         for ((x, y), c) in m.items_mut() {
-            if c.colour == Black { continue; }
+            if c.colour == bg { continue; }
 
             let cat = 
                 if x == 0 {
-                    if (y == 0 || cells[(x,y-1)].colour == Black) && (y == cells.columns - 1 || cells[(x,y+1)].colour == Black) {
+                    if (y == 0 || cells[(x,y-1)].colour == bg) && (y == cells.columns - 1 || cells[(x,y+1)].colour == bg) {
                         CellCategory::PointT
                     } else if y == 0 {
-                        if cells.rows == 1 || cells[(x+1,y)].colour == Black {
+                        if cells.rows == 1 || cells[(x+1,y)].colour == bg {
                             CellCategory::PointL
                         } else {
                             CellCategory::CornerTL
                         }
                     } else if y == cells.columns - 1 {
                         CellCategory::CornerTR
-                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == Black {
+                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == bg {
                         CellCategory::InternalCornerTR
-                    } else if y > 0 && cells[(x,y-1)].colour == Black {
+                    } else if y > 0 && cells[(x,y-1)].colour == bg {
                         CellCategory::InternalCornerTL
-                    } else if cells.rows == 1 || cells[(x+1,y)].colour == Black {
+                    } else if cells.rows == 1 || cells[(x+1,y)].colour == bg {
                         CellCategory::StemLR
                     } else {
                         CellCategory::EdgeT
                     }
                 } else if x == cells.rows - 1 {
-                    if (y == 0 || cells[(x,y-1)].colour == Black) && (y == cells.columns - 1 || cells[(x,y+1)].colour == Black) {
+                    if (y == 0 || cells[(x,y-1)].colour == bg) && (y == cells.columns - 1 || cells[(x,y+1)].colour == bg) {
                         CellCategory::PointB
                     } else if y == 0 {
                         CellCategory::CornerBL
                     } else if y == cells.columns - 1 {
-                        if cells[(x-1,y)].colour == Black {
+                        if cells[(x-1,y)].colour == bg {
                             CellCategory::PointR
                         } else {
                             CellCategory::CornerBR
                         }
-                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == Black {
+                    } else if y < cells.columns - 1 && cells[(x,y+1)].colour == bg {
                         CellCategory::InternalCornerBR
-                    } else if y > 0 && cells[(x,y-1)].colour == Black {
+                    } else if y > 0 && cells[(x,y-1)].colour == bg {
                         CellCategory::InternalCornerBL
-                    } else if cells.rows == 1 || cells[(x-1,y)].colour == Black {
+                    } else if cells.rows == 1 || cells[(x-1,y)].colour == bg {
                         CellCategory::StemLR
                     } else {
                         CellCategory::EdgeB
                     }
                 } else if y == 0 {
 //println!("{x}/{y}: {:?} {:?}", cells[(x-1,y)].colour, cells[(x+1,y)].colour);
-                    if (x == 0 || cells[(x-1,y)].colour == Black) && (x == cells.rows - 1 || cells[(x+1,y)].colour == Black) {
+                    if (x == 0 || cells[(x-1,y)].colour == bg) && (x == cells.rows - 1 || cells[(x+1,y)].colour == bg) {
                         CellCategory::PointL
-                    } else if x > 0 && cells[(x-1,y)].colour == Black {
+                    } else if x > 0 && cells[(x-1,y)].colour == bg {
                         CellCategory::InternalCornerTL
-                    } else if cells.columns == 1 || cells[(x,y+1)].colour == Black {
+                    } else if cells.columns == 1 || cells[(x,y+1)].colour == bg {
                         CellCategory::StemTB
                     } else {
                         CellCategory::EdgeL
                     }
                 } else if y == cells.columns - 1 {
 //println!("{x}/{y}: {:?} {:?}", cells[(x-1,y)].colour, cells[(x+1,y)].colour);
-                    if (x == 0 || cells[(x-1,y)].colour == Black) && (x == cells.rows - 1 || cells[(x+1,y)].colour == Black) {
+                    if (x == 0 || cells[(x-1,y)].colour == bg) && (x == cells.rows - 1 || cells[(x+1,y)].colour == bg) {
                         CellCategory::PointR
-                    } else if x > 0 && cells[(x-1,y)].colour == Black {
+                    } else if x > 0 && cells[(x-1,y)].colour == bg {
                         CellCategory::InternalCornerTR
-                    } else if cells.columns == 1 || cells[(x,y-1)].colour == Black {
+                    } else if cells.columns == 1 || cells[(x,y-1)].colour == bg {
                         CellCategory::StemTB
                     } else {
                         CellCategory::EdgeR
                     }
-                } else if cells[(x-1,y)].colour == Black && cells[(x+1,y)].colour == Black {
+                } else if cells[(x-1,y)].colour == bg && cells[(x+1,y)].colour == bg {
                     CellCategory::StemLR
-                } else if cells[(x,y-1)].colour == Black && cells[(x,y+1)].colour == Black {
+                } else if cells[(x,y-1)].colour == bg && cells[(x,y+1)].colour == bg {
                     CellCategory::StemTB
                 } else {
                     CellCategory::Middle
@@ -2599,6 +2779,127 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
         m
     }
+
+/*
+    pub fn cell_category_bg(cells: &Matrix<Cell>, bg: Colour) -> Matrix<Cell> {
+        let mut m = cells.clone();
+
+        // Special cases Single Pixel, H & V Lines
+        if cells.rows == 1 && cells.columns == 1 {
+            m[(0,0)].cat = Single;
+
+            return m;
+        } else if cells.rows == 1 {
+            for i in 0 .. m.columns {
+                m[(0,i)].cat = LineTB;
+            }
+
+            return m;
+        } else if cells.columns == 1 {
+            for i in 0 .. m.rows {
+                m[(i,0)].cat = LineLR;
+            }
+
+            return m;
+        }
+
+        for ((rw, cl), c) in m.items_mut() {
+            if c.colour == bg { continue; }
+
+            let lr = cells.rows - 1;
+            let lc = cells.columns - 1;
+
+            let tlc = rw == 0 && cl == 0;
+            let blc = rw == lr && cl == 0;
+            let trc = rw == 0 && cl == lc;
+            let brc = rw == lr && cl == lc;
+            
+            // Special case corners
+            if tlc {
+                c.cat = CornerTL;
+                continue;
+            } else if blc {
+                c.cat = CornerBL;
+                continue;
+            } else if trc {
+                c.cat = CornerTR;
+                continue;
+            } else if brc {
+                c.cat = CornerBR;
+                continue;
+            }
+
+            // Surrounding cells
+            let (tl, tt, tr, tb, br, bb, bl, bt) = if rw == 0 {
+                (bg, bg, bg, cells[(rw,cl+1)].colour, cells[(rw+1,cl+1)].colour, cells[(rw+1,cl)].colour, cells[(rw+1,cl-1)].colour, cells[(rw,cl-1)].colour)
+            } else if cl == 0 {
+                (bg, cells[(rw-1,cl)].colour, cells[(rw-1,cl+1)].colour, cells[(rw,cl+1)].colour, cells[(rw+1,cl+1)].colour, cells[(rw+1,cl)].colour, bg, bg)
+            } else if rw == lr {
+                (cells[(rw-1,cl-1)].colour, cells[(rw-1,cl)].colour, cells[(rw-1,cl+1)].colour, cells[(rw,cl+1)].colour, bg, bg, bg, cells[(rw,cl-1)].colour)
+            } else if cl == lc {
+                (cells[(rw-1,cl-1)].colour, cells[(rw-1,cl)].colour, bg, bg, bg, cells[(rw+1,cl)].colour, cells[(rw+1,cl-1)].colour, cells[(rw,cl-1)].colour)
+            } else {    // Somewhere inside
+                (cells[(rw-1,cl-1)].colour, cells[(rw-1,cl)].colour, cells[(rw-1,cl+1)].colour, cells[(rw,cl+1)].colour, cells[(rw+1,cl+1)].colour, cells[(rw+1,cl)].colour, cells[(rw+1,cl-1)].colour, cells[(rw,cl-1)].colour)
+            };
+
+            c.cat = if tl == bg && tt == bg && bt == bg {
+                InternalCornerTL
+            } else if bb == bg && bl == bg && bt == bg {
+                InternalCornerBL
+            } else if tt == bg && tr == bg && tb == bg {
+                InternalCornerTR
+            } else if tb == bg && br == bg && bb == bg {
+                InternalCornerBR
+                    /*
+            } else if tl == bg && tt == bg && bt == bg {
+                InsideCornerTL
+            } else if bb == bg && bl == bg && bt == bg {
+                InsideCornerBL
+            } else if tt == bg && tr == bg && tb == bg {
+                InsideCornerTR
+            } else if tb == bg && br == bg && bb == bg {
+                InsideCornerBR
+                    */
+            } else {
+                Unknown
+            };
+
+            /*
+            c.cat = 
+                if rw == 0 {            // Left Edge
+                    match (tl, tt, tr, tb, br, bb, bl, bt) {
+                        (false, true, _, true, _, true, false, false) => EdgeL,
+                        (false, true, _, true, _, false, false, false) => InternalCornerBL,
+                        (false, true, _, false, _, true, false, false) => HollowEdgeL,
+                        (false, true, _, false, _, false, false, false) => BottomEdgeL,
+                        (false, false, _, true, _, true, false, false) => InternalCornerTL,
+                        (false, false, _, true, _, false, false, false) => PointL,
+                        (false, false, _, false, _, true, false, false) => TopEdgeL,
+                        (false, false, _, false, _, false, false, false) => SingleL,
+                        _ => todo!(),
+                    }
+                } else if cl == 0 {     //Top Edge
+                    match (tl, tt, tr, tb, br, bb, bl, bt) {
+                        (false, false, false, true, _, true, _, true) => EdgeT,
+                        (false, false, false, true, _, true, _, false) => InternalCornerTL,
+                        (false, false, false, true, _, false, _, true) => HollowEdgeT,
+                        (false, false, false, true, _, false, _, false) => LeftEdgeT,
+                        (false, false, false, false, _, true, _, true) => InternalCornerTR,
+                        (false, false, false, false, _, true, _, false) => PointT,
+                        (false, false, false, false, _, false, _, true) => RightEdgeT,
+                        (false, false, false, false, _, false, _, false) => SingleT,
+                        _ => todo!(),
+                    }
+                } else {
+                    BG
+                };
+            */
+        }
+//println!("{m:?}");
+
+        m
+    }
+*/
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2676,6 +2977,60 @@ impl Shapes {
         for s in &other.shapes {
             self.shapes.push(s.clone());
         }
+    }
+
+    pub fn full_shapes(&self) -> Vec<Shape> {
+        let mut shapes: Vec<Shape> = Vec::new();
+
+        for s in self.shapes.iter() {
+            if s.is_full() {
+                shapes.push(s.clone());
+            }
+        }
+
+        shapes
+    }
+
+    pub fn full_shapes_sq(&self) -> Vec<Shape> {
+        let mut shapes: Vec<Shape> = Vec::new();
+
+        for s in self.to_grid().to_shapes_sq().shapes.iter() {
+            if s.is_full() {
+                shapes.push(s.clone());
+            }
+        }
+
+        shapes
+    }
+
+    pub fn all_shapes(&self) -> Vec<Shape> {
+        let mut shapes: Vec<Shape> = Vec::new();
+
+        for s in self.shapes.iter() {
+            shapes.push(s.clone());
+        }
+
+        shapes
+    }
+
+    pub fn all_shapes_sq(&self) -> Vec<Shape> {
+        let mut shapes: Vec<Shape> = Vec::new();
+
+        for s in self.to_grid().to_shapes_sq().shapes.iter() {
+            shapes.push(s.clone());
+        }
+
+        shapes
+    }
+
+    pub fn find_shape_colours(&self) -> Vec<Colour> {
+        let mut colours = Vec::new();
+
+        for s in self.to_grid().to_shapes_sq().shapes.iter() {
+            colours.push(s.colour);
+        }
+
+        colours
     }
 
     pub fn joined_by(&self) -> Option<Vec<(Shape, Shape, Shape)>> {
@@ -2809,6 +3164,10 @@ impl Shapes {
         }
 
         None
+    }
+
+    pub fn common_shape_row(&self) {
+
     }
 
     pub fn colour_groups_to_shapes(&self, bg: Colour) -> Shapes {
@@ -3888,7 +4247,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
         }
         let mut grid = Grid::new(self.nx, self.ny, colour);
 
-        if self.nx > 1000 || self.ny > 1000 {
+        if self.nx > 100 || self.ny > 100 {
             return grid;
         }
 

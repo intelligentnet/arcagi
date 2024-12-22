@@ -17,7 +17,7 @@ pub struct Grid {
 
 impl Grid {
     pub fn new(rows: usize, cols: usize, colour: Colour) -> Self {
-        if cols > 1000 || rows > 1000 {
+        if cols > 100 || rows > 100 {
             return Self::trivial();
         }
 
@@ -105,6 +105,25 @@ impl Grid {
 
     pub fn find_colour(&self, colour: Colour) -> Vec<Cell> {
         self.cells.values().filter(|c| c.colour == colour).map(|c| c.clone()).collect()
+    }
+
+    pub fn in_to_squared_out(&self) -> Self {
+        let rows = self.cells.rows;
+        let cols = self.cells.columns;
+
+        if rows != cols {
+            return Grid::trivial();
+        }
+
+        let mut g = Self::new(rows * rows, cols * cols, Black);
+
+        for r in (0 .. rows * rows).step_by(rows) {
+            for c in (0 .. cols * cols).step_by(cols) {
+                g.copy_to_position_mut(self, r, c);
+            }
+        }
+
+        g
     }
 
     pub fn find_colours(&self) -> BTreeMap<Colour, usize> {
@@ -322,17 +341,36 @@ impl Grid {
         grid
     }
 
-    pub fn copy_shape_to_grid(&mut self, shape: &Shape) {
-        let ox = shape.cells.rows / 2;
-        let oy = shape.cells.columns / 2;
+    pub fn copy_to_position(&self, grid: &Self, r: usize, c: usize) -> Self {
+        let mut i = self.clone();
 
-        for (x, y) in shape.cells.keys() {
+        i.copy_to_position_mut(grid, r, c);
+
+        i
+    }
+
+    pub fn copy_to_position_mut(&mut self, grid: &Self, rp: usize, cp: usize) {
+        if rp + grid.cells.rows > self.cells.rows || cp + grid.cells.columns > self.cells.columns {
+            return;
+        }
+
+        for ((r, c), cell) in grid.cells.items() {
+            self.cells[(rp + r, cp + c)] = cell.clone();
+        }
+    }
+
+    pub fn copy_shape_to_grid_mut(&mut self, shape: &Shape) {
+        self.copy_shape_to_grid_position_mut(shape, shape.orow, shape.ocol)
+    }
+
+    pub fn copy_shape_to_grid_position_mut(&mut self, shape: &Shape, row: usize, col: usize) {
+        for (r, c) in shape.cells.keys() {
             // Clip
-            if shape.orow < ox || shape.ocol < oy || shape.orow-ox+x >= self.cells.rows || shape.ocol-oy+y >= self.cells.columns {
+            if row+r >= self.cells.rows || col+c >= self.cells.columns {
                 continue;
             }
 
-            self.cells[(shape.orow-ox+x, shape.ocol-oy+y)].colour = shape.cells[(x,y)].colour;
+            self.cells[(row+r, col+c)].colour = shape.cells[(r,c)].colour;
         }
     }
 
@@ -340,26 +378,30 @@ impl Grid {
         for (j, s) in shapes.iter().enumerate() {
             for i in j .. shapes.len() {
                 if hv {
-                    self.draw_line_row(s, shapes[i], s.colour, false);
+                    self.draw_line_row(s, shapes[i], s.colour, false, false);
                 } else {
-                    self.draw_line_col(s, shapes[i], s.colour, false);
+                    self.draw_line_col(s, shapes[i], s.colour, false, false);
                 }
             }
         }
         for (j, s) in shapes.iter().enumerate() {
             for i in j .. shapes.len() {
                 if hv {
-                    self.draw_line_col(s, shapes[i], s.colour, overwrite);
+                    self.draw_line_col(s, shapes[i], s.colour, overwrite, false);
                 } else {
-                    self.draw_line_row(s, shapes[i], s.colour, overwrite);
+                    self.draw_line_row(s, shapes[i], s.colour, overwrite, false);
                 }
             }
         }
     }
 
     pub fn draw_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour) {
-        fn change_colour(cell_colour: &mut Colour, colour: Colour) {
-            if *cell_colour == Black || *cell_colour == colour {
+        self.draw_bg_mut(dir, r, c, colour, Black);
+    }
+
+    pub fn draw_bg_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour, bg: Colour) {
+        fn change_colour(cell_colour: &mut Colour, colour: Colour, bg: Colour) {
+            if *cell_colour == bg || *cell_colour == colour {
                 *cell_colour = colour;
             }
         }
@@ -367,111 +409,139 @@ impl Grid {
         match dir {
             Up => {
                 for r in 0 ..= r {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             Down => {
                 for r in r .. self.cells.rows {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             Left => {
                 for c in 0 ..= c {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             Right => {
                 for c in c .. self.cells.columns {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             UpRight => {
                 for (r, c) in ((0 ..= r).rev()).zip(0 ..= self.cells.columns) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour);
+                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                     }
                 }
             },
             UpLeft => {
                 for (r, c) in ((0 ..= r).rev()).zip((0 ..= c).rev()) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour);
+                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                     }
                 }
             },
             DownRight => {
                 for (r, c) in (r .. self.cells.rows).zip(c .. self.cells.columns) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour);
+                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                     }
                 }
             },
             DownLeft => {
                 for (r, c) in (r .. self.cells.rows).zip((0 ..= c).rev()) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour);
+                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                     }
                 }
             },
             FromUpRight => {
                 for (r, c) in (0 ..= r).rev().zip(c-1 .. self.cells.columns) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             FromUpLeft => {
                 for (r, c) in (0 ..= r).zip(0 ..= c) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             FromDownRight => {
                 for (r, c) in (r .. self.cells.rows).zip(c .. self.cells.columns) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             FromDownLeft => {
                 for (r, c) in (r-1 .. self.cells.rows).zip((0 ..= c).rev()) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour);
+                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                 }
             },
             _ => {},
         }
     }
 
-    pub fn draw_line_row(&mut self, s1: &Shape, s2: &Shape, colour: Colour, overwrite: bool) {
+    pub fn draw_line_row(&mut self, s1: &Shape, s2: &Shape, colour: Colour, overwrite: bool, fill: bool) {
         let x1 = s1.orow;
         let y1 = s1.ocol;
         let x2 = s2.orow;
         let y2 = s2.ocol;
 
-        if x1 == x2 && y1 != y2 {
-            let thick = s1.cells.columns;
+        self.draw_line_row_coords(x1, y1, x2, y2, colour, overwrite, fill, s1.cells.columns);
+    }
 
+    pub fn draw_line_row_coords(&mut self, x1: usize, y1: usize, x2: usize, y2: usize, colour: Colour, overwrite: bool, fill: bool, thick: usize) {
+        if x1 == x2 && y1 != y2 {
             for y in y1.min(y2)+1 .. y1.max(y2) {
                 for t in 0 .. thick {
                     if self.cells.rows <= x1+t || self.cells.columns <= y {
                         break;
                     }
                     if overwrite || self.cells[(x1+t,y)].colour == Black {
-                        self.cells[(x1+t,y)].colour = colour;
+                        if overwrite && fill && self.cells[(x1+t,y)].colour != Black {
+                            self.flood_fill_bg_mut(x1+t, y, self.cells[(x1+t,y)].colour, NoColour, colour);
+                        } else {
+                            if overwrite && fill && self.cells[(x1+t-1,y)].colour != Black {
+                                self.flood_fill_bg_mut(x1+t-1, y, self.cells[(x1+t-1,y)].colour, NoColour, colour);
+                            }
+                            self.cells[(x1+t,y)].colour = colour;
+                            if overwrite && fill && self.cells[(x1+t+1,y)].colour != Black {
+                                self.flood_fill_bg_mut(x1+t+1, y, self.cells[(x1+t+1,y)].colour, NoColour, colour);
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    pub fn draw_line_col(&mut self, s1: &Shape, s2: &Shape, colour: Colour, overwrite: bool) {
+    pub fn draw_line_col(&mut self, s1: &Shape, s2: &Shape, colour: Colour, overwrite: bool, fill: bool) {
         let x1 = s1.orow;
         let y1 = s1.ocol;
         let x2 = s2.orow;
         let y2 = s2.ocol;
 
-        if y1 == y2 && x1 != x2 {
-            let thick = s1.cells.rows;
+        self.draw_line_col_coords(x1, y1, x2, y2, colour, overwrite, fill, s1.cells.rows);
+    }
 
+    pub fn draw_line_col_coords(&mut self, x1: usize, y1: usize, x2: usize, y2: usize, colour: Colour, overwrite: bool, fill: bool, thick: usize) {
+        if y1 == y2 && x1 != x2 {
             for x in x1.min(x2)+1 .. x1.max(x2) {
                 for t in 0 .. thick {
-                    if self.cells.rows > x && self.cells.columns > y1+t && (overwrite || self.cells[(x,y1+t)].colour == Black) {
-                        self.cells[(x,y1+t)].colour = colour;
+                    if self.cells.rows <= x || self.cells.columns <= y1+t {
+                        break;
+                    }
+
+                    if overwrite || self.cells[(x,y1+t)].colour == Black {
+                        if overwrite && fill && self.cells[(x,y1+t)].colour != Black {
+                            self.flood_fill_bg_mut(x, y1+t, self.cells[(x,y1+t)].colour, NoColour, colour);
+                        } else {
+                            if overwrite && fill && self.cells[(x,y1+t-1)].colour != Black {
+                                self.flood_fill_bg_mut(x, y1+t-1, self.cells[(x,y1+t-1)].colour, NoColour, colour);
+                            }
+                            self.cells[(x,y1+t)].colour = colour;
+                            if overwrite && fill && self.cells[(x,y1+t+1)].colour != Black {
+                                self.flood_fill_bg_mut(x, y1+t+1, self.cells[(x,y1+t+1)].colour, NoColour, colour);
+                            }
+                        }
                     }
                 }
             }
@@ -633,6 +703,30 @@ impl Grid {
 
     pub fn dimensions(&self) -> (usize, usize) {
         (self.cells.columns, self.cells.rows)
+    }
+
+    pub fn add_border(&self, n: usize) -> Self {
+        self.add_border_colour(n, Black)
+    }
+
+    pub fn add_border_colour(&self, n: usize, colour: Colour) -> Self {
+        let mut g = Self::new(self.cells.rows + n * 2, self.cells.columns + n * 2, colour);
+
+        g.copy_to_position_mut(&self, n, n);
+
+        g
+    }
+
+    pub fn remove_border(&self, n: usize) -> Self {
+        if self.cells.rows < n * 2 || self.cells.columns < n *  2 {
+            return self.clone();
+        }
+
+        self.subgrid(n, self.cells.rows - n * 2, n, self.cells.columns - n * 2)
+    }
+
+    pub fn max_dim(&self) -> usize {
+        self.cells.rows.max(self.cells.columns)
     }
 
     pub fn fill_border(&mut self) {
@@ -860,15 +954,23 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
 
     pub fn flood_fill(&self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
+        self.flood_fill_bg(x, y, ignore_colour, Black, new_colour)
+    }
+
+    pub fn flood_fill_bg(&self, x: usize, y: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) -> Self {
         let mut grid = self.clone();
 
-        grid.flood_fill_mut(x, y, ignore_colour, new_colour);
+        grid.flood_fill_bg_mut(x, y, ignore_colour, bg, new_colour);
 
         grid
     }
 
     pub fn flood_fill_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
-        let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == Black || self.cells[i].colour == ignore_colour);
+        self.flood_fill_bg_mut(x, y, ignore_colour, Black, new_colour)
+    }
+
+    pub fn flood_fill_bg_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) {
+        let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == bg || self.cells[i].colour == ignore_colour);
 
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour);
     }
@@ -901,6 +1003,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         Self::new_from_matrix(&m)
     }
 
+    /*
     pub fn subgrid2(&self, tlx: usize, sx: usize, tly: usize, sy: usize) -> Self {
 //println!("{} {} {} {}", sx, sy, self.cells.rows, self.cells.columns);
         let mut m = Matrix::new(sx, sy, Cell::new(0, 0, 0));
@@ -922,6 +1025,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         Self::new_from_matrix(&m)
     }
+    */
 
     pub fn cell_colour_cnt_map(&self) -> BTreeMap<Colour, usize>  {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
@@ -1524,11 +1628,38 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         Shape::new_empty()
     }
 
+    pub fn find_patch(&self, patch: &Shape) -> (usize, usize) {
+        if patch.size() < 4 {
+            return (0, 0);
+        }
+        let colour00 = patch.cells[(0,0)].colour;
+        let colour01 = patch.cells[(0,1)].colour;
+        let colour10 = patch.cells[(1,0)].colour;
+        let colour11 = patch.cells[(1,1)].colour;
+
+        for ((rw, cl), cell) in self.cells.items() {
+            if rw > patch.cells.rows || cl > patch.cells.columns {
+                // find candidate
+                if cell.colour == colour00 && rw + patch.cells.rows < self.cells.rows && cl + patch.cells.columns < self.cells.columns && self.cells[(rw+1,cl)].colour == colour10 && self.cells[(rw,cl+1)].colour == colour01 && self.cells[(rw+1,cl+1)].colour == colour11 {
+                    let s = self.subgrid(rw, patch.cells.rows, cl, patch.cells.columns);
+
+                    if s.equals(&patch.to_grid()) == Same {
+                        return (rw, cl);
+                    }
+                }
+            }
+        }
+
+        (0, 0)
+    }
+
     pub fn find_colour_patches(&self, colour: Colour) -> Shapes {
         fn mshape(cells: &mut Matrix<Cell>, colour: Colour) -> Option<(usize, usize, Matrix<Cell>)> {
             // Find starting position
             let xy = cells.items().filter(|(_, c)| c.colour == colour).map(|(pos, _)| pos).min();
-            if let Some((0, 0)) = xy { return None; }
+            //if let Some((0, 0)) = xy {    // This is allowed???
+            //    return None;
+            //}
 
             if let Some((x, y)) = xy {
                 let reachable = cells.bfs_reachable((x, y), false, |i| cells[i].colour == colour);
@@ -1574,8 +1705,11 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
 
     pub fn find_black_patches(&self) -> Shapes {
-        if self.cells.rows < 12 && self.cells.columns < 12 {
-            //return Shapes::new_sized(self.cells.rows, self.cells.columns);
+        self.find_black_patches_limit(12)
+    }
+
+    pub fn find_black_patches_limit(&self, limit: usize) -> Shapes {
+        if self.cells.rows < limit && self.cells.columns < limit {
             return Shapes::new_sized(0, 0);
         }
         self.find_colour_patches(Black)
@@ -1916,6 +2050,22 @@ println!("BG not Black {:?}", s.colour);
         Shape::new(x, y, &self.cells)
     }
 
+    pub fn as_shapes(&self) -> Shapes {
+        if self.size() == 0 {
+            return Shapes::new();
+        }
+
+        Shapes::new_from_shape(&Shape::new_cells(&self.cells))
+    }
+
+    pub fn as_shapes_position(&self, x: usize, y: usize) -> Shapes {
+        if self.size() == 0 {
+            return Shapes::new();
+        }
+
+        Shapes::new_from_shape(&Shape::new(x, y, &self.cells))
+    }
+
     pub fn as_pixel_shapes(&self) -> Shapes {
         if self.size() == 0 {
             return Shapes::new();
@@ -2157,7 +2307,6 @@ println!("BG not Black {:?}", s.colour);
     }
 
     /*
-    */
     pub fn diff_only_same(&self) -> Self {
         let mut g = self.clone();
 
@@ -2171,6 +2320,7 @@ println!("BG not Black {:?}", s.colour);
 
         g
     }
+    */
 
     pub fn diff_only_diff(&self) -> Self {
         let mut g = self.clone();
@@ -2187,6 +2337,7 @@ println!("BG not Black {:?}", s.colour);
     }
 
     // Experiiments on difference allowed
+    /*
     pub fn diff_only(&self, colour: Colour, n: usize) -> Self {
         match n {
            0 => self.diff_only_and(colour),
@@ -2195,6 +2346,7 @@ println!("BG not Black {:?}", s.colour);
            _ => Self::trivial()
         }
     }
+    */
 
     pub fn diff_only_and(&self, colour: Colour) -> Self {
         let mut g = self.clone();
@@ -2232,6 +2384,34 @@ println!("BG not Black {:?}", s.colour);
                 c.colour = Black;
             } else {
                 c.colour = colour;
+            }
+        }
+
+        g
+    }
+
+    pub fn diff_only_not(&self, colour: Colour) -> Self {
+        let mut g = self.clone();
+
+        for c in g.cells.values_mut() {
+            if c.colour == Black {
+                c.colour = colour;
+            } else {
+                c.colour = Black;
+            }
+        }
+
+        g
+    }
+
+    pub fn diff_only_same(&self) -> Self {
+        let mut g = self.clone();
+
+        for c in g.cells.values_mut() {
+            if c.colour.is_same() {
+                c.colour = c.colour.to_base();
+            } else {
+                c.colour = Black;
             }
         }
 
@@ -2626,12 +2806,13 @@ println!("BG not Black {:?}", s.colour);
         let hx = self.cells.rows / 2;
         let hy = self.cells.columns / 2;
 
-        let s1 = if self.cells.rows % 2 == 0 {
+        //let s1 = if self.cells.rows % 2 == 0 {
+        let s1 = if self.cells.rows > self.cells.columns {
             self.subgrid(0, hx, 0, self.cells.columns)
         } else {
             self.subgrid(0, self.cells.rows, 0, hy)
         };
-        let s2 = if self.cells.rows % 2 == 0 {
+        let s2 = if self.cells.rows > self.cells.columns {
             self.subgrid(hx, self.cells.rows - hx, 0, self.cells.columns)
         } else {
             self.subgrid(0, self.cells.rows, hy, self.cells.columns - hy)
