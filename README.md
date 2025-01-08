@@ -79,6 +79,6 @@ second on most machines, this will change as more cases are completed.
 22 December 2024 - After o3 'Success'
 -------------------------------------
 
-The three o3 unsolved uzzles are solved by this implementation. c6e1b8da, 0d87d2a6 and b457fec5.
+The three o3 unsolved puzzles are solved by this implementation. c6e1b8da, 0d87d2a6 and b457fec5.
 
 I'm not happy with 0d87d2a6 as the extending arm should only change other shapes it crosses, if and only if it goes through them, not a near miss. That's the 'best' human interpretation! I appreciate 2 attempts are allowed, though I don't think that should be necessary, the interpretation should be deterministic given the experimental examples!!! Humans solve IQ tests analytically, not by thinking, 'Ah, this is ambiguous, these are the choices'. Or guessing, though as a last resort we have all done that, but it's not repeatable and not appropriate here!  Can we remove this 2 guess approach please for version 2.

@@ -122,7 +122,7 @@ pub fn experiment_grid(ex: &Examples, file: &str, experiment: usize, _trans: Tra
 
 pub fn experiment_example(ex: &Examples, file: &str, experiment: usize, _trans: Transformation, func: &(dyn Fn(&Example) -> Grid + RefUnwindSafe)) -> Vec<Grid> {
     for (attempts, e) in ex.examples.iter().enumerate() {
-        //if attempts < 1 { continue; }
+        //if attempts < 2 { continue; }
         let target = &e.output.grid;
         let ans = func(e);
 

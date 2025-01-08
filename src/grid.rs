@@ -104,7 +104,7 @@ impl Grid {
     }
 
     pub fn find_colour(&self, colour: Colour) -> Vec<Cell> {
-        self.cells.values().filter(|c| c.colour == colour).map(|c| c.clone()).collect()
+        self.cells.values().filter(|c| c.colour == colour).cloned().collect()
     }
 
     pub fn in_to_squared_out(&self) -> Self {
@@ -144,7 +144,7 @@ impl Grid {
             .map(|(col, _)| col);
 
         if let Some(col) = col {
-            col.clone()
+            *col
         } else {
             NoColour
         }
@@ -158,7 +158,7 @@ impl Grid {
             .map(|(col, _)| col);
 
         if let Some(col) = col {
-            col.clone()
+            *col
         } else {
             NoColour
         }
@@ -199,10 +199,8 @@ impl Grid {
         }
 
         for ((r, c), cell) in self.cells.items() {
-            if r != c {
-                if cell.colour != Black {
-                    return false;
-                }
+            if r != c && cell.colour != Black {
+                return false;
             }
         }
 
@@ -223,24 +221,24 @@ impl Grid {
         let mut values: Vec<Colour> = vec![Black;self.cells.columns];
         let mut counts: Vec<usize> = vec![0;self.cells.columns];
 
-        for ((x, y), c) in self.cells.items() {
-            if self.cells[(x,y)].colour != Black {
-                if values[y] == Black {
-                    values[y] = c.colour;
+        for ((r, c), cell) in self.cells.items() {
+            if self.cells[(r,c)].colour != Black {
+                if values[c] == Black {
+                    values[c] = cell.colour;
                 }
 
-                counts[y] += 1;
+                counts[c] += 1;
             }
         }
 
         let mut m = self.cells.clone();
 
-        for (x, y) in self.cells.keys() {
-            if self.cells[(x,y)].colour == Black {
-               m[(x,y)].colour = values[y];
+        for (r, c) in self.cells.keys() {
+            if self.cells[(r,c)].colour == Black {
+               m[(r,c)].colour = values[c];
             }
-            if self.cells.rows - x > counts[y] {
-               m[(x,y)].colour = Black;
+            if self.cells.rows - r > counts[c] {
+               m[(r,c)].colour = Black;
             }
         }
 
@@ -254,11 +252,11 @@ impl Grid {
     pub fn move_down(&self) -> Grid {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
-        for y in 0 .. self.cells.columns {
-            for x in 1 .. self.cells.rows {
-                m[(x,y)].row = x;
-                m[(x,y)].col = y;
-                m[(x,y)].colour = self.cells[(x - 1,y)].colour;
+        for r in 1 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                m[(r,c)].row = r;
+                m[(r,c)].col = c;
+                m[(r,c)].colour = self.cells[(r - 1,c)].colour;
             }
         }
 
@@ -274,11 +272,11 @@ impl Grid {
     pub fn move_up(&self) -> Grid {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
-        for y in 0 .. self.cells.columns {
-            for x in 1 .. self.cells.rows {
-                m[(x,y)].row = x;
-                m[(x,y)].col = y;
-                m[(x - 1,y)].colour = self.cells[(x,y)].colour;
+        for r in 1 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                m[(r,c)].row = r;
+                m[(r,c)].col = c;
+                m[(r - 1,c)].colour = self.cells[(r,c)].colour;
             }
         }
 
@@ -288,11 +286,11 @@ impl Grid {
     pub fn move_right(&self) -> Grid {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
-        for x in 0 .. self.cells.rows {
-            for y in 1 .. self.cells.columns {
-                m[(x,y)].row = x;
-                m[(x,y)].col = y;
-                m[(x,y)].colour = self.cells[(x,y - 1)].colour;
+        for r in 0 .. self.cells.rows {
+            for c in 1 .. self.cells.columns {
+                m[(r,c)].row = r;
+                m[(r,c)].col = c;
+                m[(r,c)].colour = self.cells[(r,c - 1)].colour;
             }
         }
 
@@ -302,15 +300,71 @@ impl Grid {
     pub fn move_left(&self) -> Grid {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
-        for x in 0 .. self.cells.rows {
-            for y in 1 .. self.cells.columns {
-                m[(x,y)].row = x;
-                m[(x,y)].col = y;
-                m[(x,y - 1)].colour = self.cells[(x,y)].colour;
+        for r in 0 .. self.cells.rows {
+            for c in 1 .. self.cells.columns {
+                m[(r,c)].row = r;
+                m[(r,c)].col = c;
+                m[(r,c - 1)].colour = self.cells[(r,c)].colour;
             }
         }
 
         Grid::new_from_matrix(&m)
+    }
+
+    pub fn trim(&self, r: usize, c: usize) -> Self {
+        if self.cells.rows <= r && self.cells.columns <= c {
+            return self.clone();
+        }
+
+        let mut grid = Grid::new(r, c, Black);
+
+        for ((r, c), cell) in self.cells.items() {
+            if r < grid.cells.rows && c < grid.cells.columns {
+                grid.cells[(r,c)].row = cell.row;
+                grid.cells[(r,c)].col = cell.col;
+                grid.cells[(r,c)].colour = cell.colour;
+            }
+        }
+
+        grid
+    }
+
+    pub fn free_border(&self, dir: Direction) -> bool {
+        match dir {
+            Up => {
+                for i in 0 .. self.cells.columns {
+                    if self.cells[(0, i)].colour != Black {
+                        return false;
+                    }
+                }
+                true
+            },
+            Down => {
+                for i in 0 .. self.cells.columns {
+                    if self.cells[(self.cells.rows - 1, i)].colour != Black {
+                        return false;
+                    }
+                }
+                true
+            },
+            Left => {
+                for i in 0 .. self.cells.rows {
+                    if self.cells[(i, 0)].colour != Black {
+                        return false;
+                    }
+                }
+                true
+            },
+            Right => {
+                for i in 0 .. self.cells.rows {
+                    if self.cells[(i, self.cells.columns - 1)].colour != Black {
+                        return false;
+                    }
+                }
+                true
+            },
+            _ => false
+        }
     }
 
     pub fn recolour(&self, from: Colour, to: Colour) -> Self {
@@ -376,20 +430,20 @@ impl Grid {
 
     pub fn draw_lines(&mut self, shapes: &[&Shape], overwrite: bool, hv: bool) {
         for (j, s) in shapes.iter().enumerate() {
-            for i in j .. shapes.len() {
+            for shape in shapes.iter().skip(j) {
                 if hv {
-                    self.draw_line_row(s, shapes[i], s.colour, false, false);
+                    self.draw_line_row(s, shape, s.colour, false, false);
                 } else {
-                    self.draw_line_col(s, shapes[i], s.colour, false, false);
+                    self.draw_line_col(s, shape, s.colour, false, false);
                 }
             }
         }
         for (j, s) in shapes.iter().enumerate() {
-            for i in j .. shapes.len() {
+            for shape in shapes.iter().skip(j) {
                 if hv {
-                    self.draw_line_col(s, shapes[i], s.colour, overwrite, false);
+                    self.draw_line_col(s, shape, s.colour, overwrite, false);
                 } else {
-                    self.draw_line_row(s, shapes[i], s.colour, overwrite, false);
+                    self.draw_line_row(s, shape, s.colour, overwrite, false);
                 }
             }
         }
@@ -480,31 +534,32 @@ impl Grid {
     }
 
     pub fn draw_line_row(&mut self, s1: &Shape, s2: &Shape, colour: Colour, overwrite: bool, fill: bool) {
-        let x1 = s1.orow;
-        let y1 = s1.ocol;
-        let x2 = s2.orow;
-        let y2 = s2.ocol;
+        let r1 = s1.orow;
+        let c1 = s1.ocol;
+        let r2 = s2.orow;
+        let c2 = s2.ocol;
 
-        self.draw_line_row_coords(x1, y1, x2, y2, colour, overwrite, fill, s1.cells.columns);
+        self.draw_line_row_coords(r1, c1, r2, c2, colour, overwrite, fill, s1.cells.columns);
     }
 
-    pub fn draw_line_row_coords(&mut self, x1: usize, y1: usize, x2: usize, y2: usize, colour: Colour, overwrite: bool, fill: bool, thick: usize) {
-        if x1 == x2 && y1 != y2 {
-            for y in y1.min(y2)+1 .. y1.max(y2) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_line_row_coords(&mut self, r1: usize, c1: usize, r2: usize, c2: usize, colour: Colour, overwrite: bool, fill: bool, thick: usize) {
+        if r1 == r2 && c1 != c2 {
+            for y in c1.min(c2)+1 .. c1.max(c2) {
                 for t in 0 .. thick {
-                    if self.cells.rows <= x1+t || self.cells.columns <= y {
+                    if self.cells.rows <= r1+t || self.cells.columns <= y {
                         break;
                     }
-                    if overwrite || self.cells[(x1+t,y)].colour == Black {
-                        if overwrite && fill && self.cells[(x1+t,y)].colour != Black {
-                            self.flood_fill_bg_mut(x1+t, y, self.cells[(x1+t,y)].colour, NoColour, colour);
+                    if overwrite || self.cells[(r1+t,y)].colour == Black {
+                        if overwrite && fill && self.cells[(r1+t,y)].colour != Black {
+                            self.flood_fill_bg_mut(r1+t, y, self.cells[(r1+t,y)].colour, NoColour, colour);
                         } else {
-                            if overwrite && fill && self.cells[(x1+t-1,y)].colour != Black {
-                                self.flood_fill_bg_mut(x1+t-1, y, self.cells[(x1+t-1,y)].colour, NoColour, colour);
+                            if overwrite && fill && self.cells[(r1+t-1,y)].colour != Black {
+                                self.flood_fill_bg_mut(r1+t-1, y, self.cells[(r1+t-1,y)].colour, NoColour, colour);
                             }
-                            self.cells[(x1+t,y)].colour = colour;
-                            if overwrite && fill && self.cells[(x1+t+1,y)].colour != Black {
-                                self.flood_fill_bg_mut(x1+t+1, y, self.cells[(x1+t+1,y)].colour, NoColour, colour);
+                            self.cells[(r1+t,y)].colour = colour;
+                            if overwrite && fill && self.cells[(r1+t+1,y)].colour != Black {
+                                self.flood_fill_bg_mut(r1+t+1, y, self.cells[(r1+t+1,y)].colour, NoColour, colour);
                             }
                         }
                     }
@@ -514,32 +569,33 @@ impl Grid {
     }
 
     pub fn draw_line_col(&mut self, s1: &Shape, s2: &Shape, colour: Colour, overwrite: bool, fill: bool) {
-        let x1 = s1.orow;
-        let y1 = s1.ocol;
-        let x2 = s2.orow;
-        let y2 = s2.ocol;
+        let r1 = s1.orow;
+        let c1 = s1.ocol;
+        let r2 = s2.orow;
+        let c2 = s2.ocol;
 
-        self.draw_line_col_coords(x1, y1, x2, y2, colour, overwrite, fill, s1.cells.rows);
+        self.draw_line_col_coords(r1, c1, r2, c2, colour, overwrite, fill, s1.cells.rows);
     }
 
-    pub fn draw_line_col_coords(&mut self, x1: usize, y1: usize, x2: usize, y2: usize, colour: Colour, overwrite: bool, fill: bool, thick: usize) {
-        if y1 == y2 && x1 != x2 {
-            for x in x1.min(x2)+1 .. x1.max(x2) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_line_col_coords(&mut self, r1: usize, c1: usize, r2: usize, c2: usize, colour: Colour, overwrite: bool, fill: bool, thick: usize) {
+        if c1 == c2 && r1 != r2 {
+            for x in r1.min(r2)+1 .. r1.max(r2) {
                 for t in 0 .. thick {
-                    if self.cells.rows <= x || self.cells.columns <= y1+t {
+                    if self.cells.rows <= x || self.cells.columns <= c1+t {
                         break;
                     }
 
-                    if overwrite || self.cells[(x,y1+t)].colour == Black {
-                        if overwrite && fill && self.cells[(x,y1+t)].colour != Black {
-                            self.flood_fill_bg_mut(x, y1+t, self.cells[(x,y1+t)].colour, NoColour, colour);
+                    if overwrite || self.cells[(x,c1+t)].colour == Black {
+                        if overwrite && fill && self.cells[(x,c1+t)].colour != Black {
+                            self.flood_fill_bg_mut(x, c1+t, self.cells[(x,c1+t)].colour, NoColour, colour);
                         } else {
-                            if overwrite && fill && self.cells[(x,y1+t-1)].colour != Black {
-                                self.flood_fill_bg_mut(x, y1+t-1, self.cells[(x,y1+t-1)].colour, NoColour, colour);
+                            if overwrite && fill && self.cells[(x,c1+t-1)].colour != Black {
+                                self.flood_fill_bg_mut(x, c1+t-1, self.cells[(x,c1+t-1)].colour, NoColour, colour);
                             }
-                            self.cells[(x,y1+t)].colour = colour;
-                            if overwrite && fill && self.cells[(x,y1+t+1)].colour != Black {
-                                self.flood_fill_bg_mut(x, y1+t+1, self.cells[(x,y1+t+1)].colour, NoColour, colour);
+                            self.cells[(x,c1+t)].colour = colour;
+                            if overwrite && fill && self.cells[(x,c1+t+1)].colour != Black {
+                                self.flood_fill_bg_mut(x, c1+t+1, self.cells[(x,c1+t+1)].colour, NoColour, colour);
                             }
                         }
                     }
@@ -549,12 +605,16 @@ impl Grid {
     }
 
     fn extend(&self, lr: bool) -> Self {
+        self.extend_by(lr, 2)
+    }
+
+    fn extend_by(&self, lr: bool, amount: usize) -> Self {
         let rows = self.cells.rows;
         let cols = self.cells.columns;
         let mut grid = if lr {
-            Grid::new(rows, cols * 2, Black)
+            Grid::new(rows, cols * amount, Black)
         } else {
-            Grid::new(rows * 2, cols, Black)
+            Grid::new(rows * amount, cols, Black)
         };
 
         for ((r, c), cell) in self.cells.items() {
@@ -563,8 +623,32 @@ impl Grid {
             grid.cells[(r,c)].colour = cell.colour;
         }
 
+        grid.colour = self.colour;
+
         grid
     }
+
+    /*
+    fn extend_inc(&self, lr: bool, amount: usize) -> Self {
+        let rows = self.cells.rows;
+        let cols = self.cells.columns;
+        let mut grid = if lr {
+            Grid::new(rows, cols + amount, Black)
+        } else {
+            Grid::new(rows + amount, cols, Black)
+        };
+
+        for ((r, c), cell) in self.cells.items() {
+            grid.cells[(r,c)].row = r;
+            grid.cells[(r,c)].col = c;
+            grid.cells[(r,c)].colour = cell.colour;
+        }
+
+        grid.colour = self.colour;
+
+        grid
+    }
+    */
 
     pub fn extend_right(&self) -> Self {
         self.extend(true)
@@ -582,15 +666,37 @@ impl Grid {
         self.mirrored_rows().extend(false).mirrored_rows()
     }
 
-    fn dup(&self, lr: bool) -> Self {
+    pub fn extend_right_by(&self, amount: usize) -> Self {
+        self.extend_by(true, amount)
+    }
+
+    pub fn extend_left_by(&self, amount: usize) -> Self {
+        self.mirrored_cols().extend_by(true, amount).mirrored_cols()
+    }
+
+    pub fn extend_down_by(&self, amount: usize) -> Self {
+        self.extend_by(false, amount)
+    }
+
+    pub fn extend_up_by(&self, amount: usize) -> Self {
+        self.mirrored_rows().extend_by(false, amount).mirrored_rows()
+    }
+
+    pub fn dup_func(&self, lr: bool, func: &dyn Fn(&Self) -> Self) -> Self {
         let rows = self.cells.rows;
         let cols = self.cells.columns;
 
         // not efficient!
         let mut grid = if lr {
-            self.mirrored_cols().extend_right().mirrored_cols()
+            let temp = self.mirrored_cols().extend_right();
+            let temp = &func(&temp);
+
+            temp.mirrored_cols()
         } else {
-            self.mirrored_rows().extend_down().mirrored_rows()
+            let temp = self.mirrored_rows().extend_down();
+            let temp = &func(&temp);
+
+            temp.mirrored_rows()
         };
 
         for r in 0 .. rows {
@@ -601,7 +707,13 @@ impl Grid {
             }
         }
 
+        grid.colour = self.colour;
+
         grid
+    }
+
+    fn dup(&self, lr: bool) -> Self {
+        self.dup_func(lr, &|g| g.clone())
     }
 
     pub fn dup_right(&self) -> Self {
@@ -620,14 +732,36 @@ impl Grid {
         self.mirrored_rows().dup(false).mirrored_rows()
     }
 
-    pub fn mirror_dir(&self, lr: bool) -> Self {
+    pub fn dup_right_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.dup_func(true, &func)
+    }
+
+    pub fn dup_left_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.mirrored_cols().dup_func(true, &func).mirrored_cols()
+    }
+
+    pub fn dup_down_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.dup_func(false, &func)
+    }
+
+    pub fn dup_up_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.mirrored_rows().dup_func(false, &func).mirrored_rows()
+    }
+
+    pub fn mirror_dir_func(&self, lr: bool, func: &dyn Fn(&Self) -> Self) -> Self {
         let rows = self.cells.rows;
         let cols = self.cells.columns;
 
         let mut grid = if lr {
-            self.extend_right().mirrored_cols()
+            let temp = self.extend_right();
+            let temp = &func(&temp);
+
+            temp.mirrored_cols()
         } else {
-            self.extend_down().mirrored_rows()
+            let temp = self.extend_down();
+            let temp = &func(&temp);
+
+            temp.mirrored_rows()
         };
 
         for r in 0 .. rows {
@@ -638,7 +772,13 @@ impl Grid {
             }
         }
 
+        grid.colour = self.colour;
+
         grid
+    }
+
+    pub fn mirror_dir(&self, lr: bool) -> Self {
+        self.mirror_dir_func(lr, &|g| g.clone())
     }
 
     pub fn mirror_right(&self) -> Self {
@@ -655,6 +795,22 @@ impl Grid {
 
     pub fn mirror_up(&self) -> Self {
         self.mirrored_rows().mirror_dir(false).mirrored_rows()
+    }
+
+    pub fn mirror_right_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.mirror_dir_func(true, &func)
+    }
+
+    pub fn mirror_left_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.mirrored_cols().mirror_dir_func(true, &func).mirrored_cols()
+    }
+
+    pub fn mirror_down_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.mirror_dir_func(false, &func)
+    }
+
+    pub fn mirror_up_func(&self, func: &dyn Fn(&Self) -> Self) -> Self {
+        self.mirrored_rows().mirror_dir_func(false, &func).mirrored_rows()
     }
 
     pub fn pixels(&self) -> usize {
@@ -701,6 +857,10 @@ impl Grid {
         self.size() == other.size()
     }
 
+    pub fn same_shape(&self, other: &Self) -> bool {
+        self.cells.rows == other.cells.rows && self.cells.columns == other.cells.columns
+    }
+
     pub fn dimensions(&self) -> (usize, usize) {
         (self.cells.columns, self.cells.rows)
     }
@@ -712,7 +872,7 @@ impl Grid {
     pub fn add_border_colour(&self, n: usize, colour: Colour) -> Self {
         let mut g = Self::new(self.cells.rows + n * 2, self.cells.columns + n * 2, colour);
 
-        g.copy_to_position_mut(&self, n, n);
+        g.copy_to_position_mut(self, n, n);
 
         g
     }
@@ -727,6 +887,75 @@ impl Grid {
 
     pub fn max_dim(&self) -> usize {
         self.cells.rows.max(self.cells.columns)
+    }
+
+    pub fn derive_missing_rule(&self, other: &Self) -> Self {
+        if self.cells.rows == 1 || self.cells.columns == 0 ||other.cells.rows % self.cells.rows != 0 || other.cells.columns % self.cells.columns != 0 {
+            return Self::trivial();
+        }
+
+        let sg = other.subgrid(0, self.cells.rows, 0, self.cells.columns);
+
+        match self.diff(&sg) {
+            Some(diff) => diff,
+            None => Self::trivial(),
+        }
+    }
+
+    pub fn apply_missing_rule(&self, other: &Self) -> Self {
+        let mut grid = self.clone();
+
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour != Black {
+                grid.copy_centre(r, c, other);
+            }
+        }
+
+        grid
+    }
+
+    pub fn copy_centre(&mut self, cr: usize, cc: usize, other: &Self) {
+        if other == &Grid::trivial() {
+            return;
+        }
+        let centre_r = (other.cells.rows / 2) as isize;
+        let centre_c = (other.cells.columns / 2) as isize;
+
+        let or = centre_r - cr as isize;
+        let oc = centre_c - cc as isize;
+        let rs = if or < 0 { 0 } else { or as usize };
+        let re = if or < 0 {
+            // not happy with this
+            let incdec = if or < -1 { 1 } else { -1 };
+            (other.cells.rows as isize + or + incdec) as usize
+        } else {
+            other.cells.rows
+        }; 
+        let cs = if oc < 0 { 0 } else { oc as usize };
+        let ce = if oc < 0 {
+            // not happy with this
+            let incdec = if oc < -1 { 1 } else { -1 };
+            (other.cells.columns as isize + oc + incdec) as usize
+        } else {
+            other.cells.columns
+        }; 
+
+        for r in rs .. re {
+            for c in cs .. ce {
+                let colour = other.cells[(r, c)].colour;
+                let sr = (r as isize - or) as usize;
+                let sc = (c as isize - oc) as usize;
+
+                // untidy but necessary
+                if sr >= self.cells.rows || sc >= self.cells.columns {
+                    continue;
+                }
+
+                if !colour.is_same() && colour != Black && self.cells[(sr, sc)].colour == Black {
+                    self.cells[(sr, sc)].colour = colour.to_base();
+                }
+            }
+        }
     }
 
     pub fn fill_border(&mut self) {
@@ -808,10 +1037,10 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
     */
 
-    pub fn has_colour(&self, tlx: usize, tly: usize, xlen: usize, ylen: usize, colour: Colour) -> bool {
-        for x in tlx .. xlen {
-            for y in tly .. ylen {
-                if self.cells[(x,y)].colour == colour {
+    pub fn has_colour(&self, tlr: usize, tlc: usize, rlen: usize, clen: usize, colour: Colour) -> bool {
+        for r in tlr .. rlen {
+            for c in tlc .. clen {
+                if self.cells[(r,c)].colour == colour {
                     return true;
                 }
             }
@@ -820,28 +1049,28 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         false
     }
 
-    pub fn find_row_seq(&self, sx: usize, sy: usize, seq: &[Colour], width: usize) -> (usize, usize) {
+    pub fn find_row_seq(&self, sr: usize, sc: usize, seq: &[Colour], width: usize) -> (usize, usize) {
         let mut cnt = 0;
-        let mut yp = 0;
-        let mut xs = usize::MAX;
-        let mut ys = usize::MAX;
+        let mut xp = 0;
+        let mut rs = usize::MAX;
+        let mut cs = usize::MAX;
 
         'outer:
-        for y in 0 .. self.cells.columns - width {
-            for x in 0 .. self.cells.rows - seq.len() {
-                if x == sx+1 && y <= sy { continue 'outer}; 
-                let c = self.cells[(x,y)].clone();
-                if yp != y {
-                    yp = y;
+        for r in 0 .. self.cells.columns - width {
+            for c in 0 .. self.cells.rows - seq.len() {
+                if c == sr+1 && r <= sc { continue 'outer}; 
+                let cell = self.cells[(c,r)].clone();
+                if xp != r {
+                    xp = r;
                     cnt = 0;
-                    xs = usize::MAX;
-                    ys = usize::MAX;
+                    rs = usize::MAX;
+                    cs = usize::MAX;
                 }
-                if seq[cnt] == c.colour {
-                    if !self.has_colour(x, y, seq.len(), width, Black) {
+                if seq[cnt] == cell.colour {
+                    if !self.has_colour(c, r, seq.len(), width, Black) {
                         if cnt == 0 {
-                            xs = x;
-                            ys = y;
+                            rs = c;
+                            cs = r;
                         }
 //println!("{} {} == {} {xs}/{ys} {x} {y}", cnt, Colour::to_usize(seq[cnt]), Colour::to_usize(c.colour));
 //println!("{sy} ==== {cnt} {:?}", c.colour);
@@ -852,37 +1081,37 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
                     }
                 } else if cnt > 0 {
                     cnt = 0;
-                    xs = usize::MAX;
-                    ys = usize::MAX;
+                    rs = usize::MAX;
+                    cs = usize::MAX;
                 }
             }
         }
 
-        (xs, ys)
+        (rs, cs)
     }
 
-    pub fn find_col_seq(&self, sx: usize, sy: usize, seq: &[Colour], length: usize) -> (usize, usize) {
+    pub fn find_col_seq(&self, sr: usize, sc: usize, seq: &[Colour], length: usize) -> (usize, usize) {
         let mut cnt = 0;
-        let mut xp = 0;
-        let mut xs = usize::MAX;
-        let mut ys = usize::MAX;
+        let mut rp = 0;
+        let mut rs = usize::MAX;
+        let mut cs = usize::MAX;
 
         'outer:
-        for x in 0 .. self.cells.rows - length {
-            for y in 0 .. self.cells.columns - seq.len() {
-                if y == sy+1 && x <= sx { continue 'outer}; 
-                let c = self.cells[(x,y)].clone();
-                if xp != x {
-                    xp = x;
+        for r in 0 .. self.cells.rows - length {
+            for c in 0 .. self.cells.columns - seq.len() {
+                if c == sc+1 && r <= sr { continue 'outer}; 
+                let cell = self.cells[(r,c)].clone();
+                if rp != r {
+                    rp = r;
                     cnt = 0;
-                    xs = usize::MAX;
-                    ys = usize::MAX;
+                    rs = usize::MAX;
+                    cs = usize::MAX;
                 }
-                if seq[cnt] == c.colour {
-                    if !self.has_colour(x, y, length, seq.len(), Black) {
+                if seq[cnt] == cell.colour {
+                    if !self.has_colour(r, c, length, seq.len(), Black) {
                         if cnt == 0 {
-                            xs = x;
-                            ys = y;
+                            rs = r;
+                            cs = c;
                         }
                         cnt += 1;
                         if cnt == seq.len() {
@@ -891,13 +1120,13 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
                     }
                 } else if cnt > 0 {
                     cnt = 0;
-                    xs = usize::MAX;
-                    ys = usize::MAX;
+                    rs = usize::MAX;
+                    cs = usize::MAX;
                 }
             }
         }
 
-        (xs, ys)
+        (rs, cs)
     }
 
     pub fn colour_every_nxn_for_m(colour: Colour, side: usize, n: usize, m: usize) -> Grid {
@@ -908,10 +1137,10 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         let mut count = 0;
 
         'outer:
-        for x in 0 .. side {
-            for y in 0 .. side {
-                if (x + grid.cells.rows * y) % n == 0 {
-                    grid.cells[(x, y)].colour = colour;
+        for r in 0 .. side {
+            for c in 0 .. side {
+                if (r + grid.cells.rows * c) % n == 0 {
+                    grid.cells[(r, c)].colour = colour;
                     count += 1;
                 }
                 if count == m {
@@ -924,21 +1153,21 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
 
     pub fn colour_dimensions(&self, colour: Colour) -> (usize, usize) {
-        let mut min_x: usize = usize::MAX;
-        let mut max_x: usize = 0;
-        let mut min_y: usize = usize::MAX;
-        let mut max_y: usize = 0;
+        let mut min_r: usize = usize::MAX;
+        let mut max_r: usize = 0;
+        let mut min_c: usize = usize::MAX;
+        let mut max_c: usize = 0;
 
         for ((x, y), c) in self.cells.items() {
             if c.colour == colour {
-                min_x = x.min(min_x);
-                max_x = x.max(max_x);
-                min_y = y.min(min_y);
-                max_y = y.max(max_y);
+                min_r = x.min(min_r);
+                max_r = x.max(max_r);
+                min_c = y.min(min_c);
+                max_c = y.max(max_c);
             }
         }
 
-        (max_x - min_x + 1, max_y - min_y + 1)
+        (max_r - min_r + 1, max_c - min_c + 1)
     }
 
     pub fn bigger(&self, other: &Self) -> bool {
@@ -950,27 +1179,31 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
 
     pub fn cell_count(&self) -> usize {
-        self.cells.values().filter(|c| c.colour != Black).count()
+        self.cell_count_colour(Black)
+    }
+
+    pub fn cell_count_colour(&self, colour: Colour) -> usize {
+        self.cells.values().filter(|c| c.colour != colour).count()
     }
 
     pub fn flood_fill(&self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
         self.flood_fill_bg(x, y, ignore_colour, Black, new_colour)
     }
 
-    pub fn flood_fill_bg(&self, x: usize, y: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) -> Self {
+    pub fn flood_fill_bg(&self, r: usize, c: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) -> Self {
         let mut grid = self.clone();
 
-        grid.flood_fill_bg_mut(x, y, ignore_colour, bg, new_colour);
+        grid.flood_fill_bg_mut(r, c, ignore_colour, bg, new_colour);
 
         grid
     }
 
-    pub fn flood_fill_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
-        self.flood_fill_bg_mut(x, y, ignore_colour, Black, new_colour)
+    pub fn flood_fill_mut(&mut self, r: usize, c: usize, ignore_colour: Colour, new_colour: Colour) {
+        self.flood_fill_bg_mut(r, c, ignore_colour, Black, new_colour)
     }
 
-    pub fn flood_fill_bg_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) {
-        let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == bg || self.cells[i].colour == ignore_colour);
+    pub fn flood_fill_bg_mut(&mut self, r: usize, c: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) {
+        let reachable = self.cells.bfs_reachable((r, c), false, |i| self.cells[i].colour == bg || self.cells[i].colour == ignore_colour);
 
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour);
     }
@@ -979,53 +1212,29 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         let mut grid = self.clone();
 
         let coloured: Vec<(usize, usize)> = grid.cells.items()
-            .filter(|(_, c)| c.colour == ignore_colour)
+            .filter(|(_, cell)| cell.colour == ignore_colour)
             .map(|(i, _)| i)
             .collect();
 
         coloured.iter()
-            .for_each(|(x, y)| grid.flood_fill_mut(*x, *y, ignore_colour, new_colour));
+            .for_each(|(r, c)| grid.flood_fill_mut(*r, *c, ignore_colour, new_colour));
 
         grid
     }
 
-    pub fn subgrid(&self, tlx: usize, sx: usize, tly: usize, sy: usize) -> Self {
-        let mut m = Matrix::new(sx, sy, Cell::new(0, 0, 0));
+    pub fn subgrid(&self, tlr: usize, sr: usize, tlc: usize, sc: usize) -> Self {
+        let mut m = Matrix::new(sr, sc, Cell::new(0, 0, 0));
 
-        for x in 0 ..  sx {
-            for y in 0 .. sy {
-                m[(x,y)].row = self.cells[(x + tlx,y + tly)].row;
-                m[(x,y)].col = self.cells[(x + tlx,y + tly)].col;
-                m[(x,y)].colour = self.cells[(x + tlx,y + tly)].colour;
+        for r in 0 ..  sr {
+            for c in 0 .. sc {
+                m[(r,c)].row = self.cells[(r + tlr,c + tlc)].row;
+                m[(r,c)].col = self.cells[(r + tlr,c + tlc)].col;
+                m[(r,c)].colour = self.cells[(r + tlr,c + tlc)].colour;
             }
         }
 
         Self::new_from_matrix(&m)
     }
-
-    /*
-    pub fn subgrid2(&self, tlx: usize, sx: usize, tly: usize, sy: usize) -> Self {
-//println!("{} {} {} {}", sx, sy, self.cells.rows, self.cells.columns);
-        let mut m = Matrix::new(sx, sy, Cell::new(0, 0, 0));
-
-        for x in 0 .. sx {
-            for y in 0 .. sy {
-                if sx < self.cells.rows {
-                    m[(x,y)].row = self.cells[(x + tlx - 1,y)].row - sx - 1;
-                    m[(x,y)].col = self.cells[(x + tlx - 1,y)].col;
-                    m[(x,y)].colour = self.cells[(x + tlx - 1,y)].colour;
-                } else {
-                    m[(x,y)].row = self.cells[(x,y + tly - 1)].row;
-                    m[(x,y)].col = self.cells[(x,y + tly - 1)].col - sy - 1;
-                    m[(x,y)].colour = self.cells[(x,y + tly - 1)].colour;
-                }
-            }
-        }
-//Self::new_from_matrix(&m).show();
-
-        Self::new_from_matrix(&m)
-    }
-    */
 
     pub fn cell_colour_cnt_map(&self) -> BTreeMap<Colour, usize>  {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
@@ -1042,7 +1251,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     pub fn get_diff_colour(&self, other: &Self) -> Colour {
         let mut in_colour = Black;
 
-        if let Some(diff) = self.diff(&other) {
+        if let Some(diff) = self.diff(other) {
             let colour = diff.cell_colour_cnt_map_diff();
 
             if colour.len() != 1 {
@@ -1079,34 +1288,34 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
     pub fn border_top(&self) -> bool {
         self.cells.items()
-            .filter(|((x, _), c)| *x == 0 && c.colour != Black)
+            .filter(|((r, _), cell)| *r == 0 && cell.colour != Black)
             .count() == self.cells.columns - 1
     }
 
     pub fn border_bottom(&self) -> bool {
         self.cells.items()
-            .filter(|((x, _), c)| *x == self.cells.columns - 1 && c.colour != Black)
+            .filter(|((r, _), cell)| *r == self.cells.columns - 1 && cell.colour != Black)
             .count() == self.cells.columns - 1
     }
 
     pub fn border_left(&self) -> bool {
         self.cells.items()
-            .filter(|((_, y), c)| *y == 0 && c.colour != Black)
+            .filter(|((_, c), cell)| *c == 0 && cell.colour != Black)
             .count() == self.cells.rows - 1
     }
 
     pub fn border_right(&self) -> bool {
         self.cells.items()
-            .filter(|((_, y), c)| *y == self.cells.rows - 1 && c.colour != Black)
+            .filter(|((_, c), cell)| *c == self.cells.rows - 1 && cell.colour != Black)
             .count() == self.cells.rows - 1
     }
 
     pub fn mirrored_rows(&self) -> Self {
         let mut m = self.cells.flipped_ud();
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x;
-            m[(x, y)].col = y;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r;
+            m[(r, c)].col = c;
         }
         
         Self::new_from_matrix(&m)
@@ -1199,9 +1408,9 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         let offset: usize = if len % 2 == 0 { 0 } else { 1 };
 
-        for y in 0 .. self.cells.columns {
-            for x in 0 .. half {
-                if self.cells[(x, y)].colour != self.cells[(half + offset + x, y)].colour {
+        for c in 0 .. self.cells.columns {
+            for r in 0 .. half {
+                if self.cells[(r, c)].colour != self.cells[(half + offset + r, c)].colour {
                     return false;
                 }
             }
@@ -1218,9 +1427,9 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         let offset: usize = if len % 2 == 0 { 0 } else { 1 };
 
-        for x in 0 .. self.cells.rows {
-            for y in 0 .. half {
-                if self.cells[(x, y)].colour != self.cells[(x, half + offset + y)].colour {
+        for r in 0 .. self.cells.rows {
+            for c in 0 .. half {
+                if self.cells[(r, c)].colour != self.cells[(r, half + offset + c)].colour {
                     return false;
                 }
             }
@@ -1246,9 +1455,9 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         m.transpose();
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x;
-            m[(x, y)].col = y;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r;
+            m[(r, c)].col = c;
         }
         
         Self::new_from_matrix(&m)
@@ -1299,9 +1508,9 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         m.rotate_cw(times);
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x;
-            m[(x, y)].col = y;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r;
+            m[(r, c)].col = c;
         }
         
         Self::new_from_matrix(&m)
@@ -1316,9 +1525,9 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         m.rotate_ccw(times);
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x;
-            m[(x, y)].col = y;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r;
+            m[(r, c)].col = c;
         }
         
         Self::new_from_matrix(&m)
@@ -1388,9 +1597,9 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     pub fn colours(&self) -> BTreeMap<Colour, usize> {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
 
-        for c in self.cells.values() {
-            if c.colour != Black {
-                *h.entry(c.colour).or_insert(0) += 1;
+        for cell in self.cells.values() {
+            if cell.colour != Black {
+                *h.entry(cell.colour).or_insert(0) += 1;
             }
         }
 
@@ -1432,52 +1641,52 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         }
     }
 
-    fn draw_row(&mut self, from_y: usize, to_y: usize, x: usize, colour: Colour) -> usize {
-        for y in from_y .. to_y {
-            self.cells[(x, y)].colour = colour;
+    fn draw_row(&mut self, from_c: usize, to_c: usize, x: usize, colour: Colour) -> usize {
+        for c in from_c .. to_c {
+            self.cells[(x, c)].colour = colour;
         }
 
-        if to_y > 0 { to_y - 1 } else { 0 }
+        if to_c > 0 { to_c - 1 } else { 0 }
     }
 
-    fn draw_col(&mut self, from_x: usize, to_x: usize, y: usize, colour: Colour) -> usize {
-        for x in from_x .. to_x {
-            self.cells[(x, y)].colour = colour;
+    fn draw_col(&mut self, from_r: usize, to_r: usize, y: usize, colour: Colour) -> usize {
+        for r in from_r .. to_r {
+            self.cells[(r, y)].colour = colour;
         }
 
-        if to_x > 0 { to_x - 1 } else { 0 }
+        if to_r > 0 { to_r - 1 } else { 0 }
     }
 
     pub fn do_circle(&self, colour: Colour, spiral: bool) -> Self {
         let inc = if spiral { 2 } else { 0 };
         let mut copy = self.clone();
         let mut cinc = 0;
-        let mut sx = 0;
-        let mut sy = 1;
+        let mut sr = 0;
+        let mut sc = 1;
         let mut rows = self.cells.rows;
         let mut cols = self.cells.columns;
 
         // First round
-        let mut cy = copy.draw_row(sx, cols, 0, colour);
-        let mut cx = copy.draw_col(sy, rows, cy, colour);
-        cy = copy.draw_row(sx, cols - 1, cx, colour);
-        if spiral { sy += 1};
-        copy.draw_col(sy, rows - 1, 0, colour);
+        let mut cc = copy.draw_row(sr, cols, 0, colour);
+        let mut cr = copy.draw_col(sc, rows, cc, colour);
+        cc = copy.draw_row(sr, cols - 1, cr, colour);
+        if spiral { sc += 1};
+        copy.draw_col(sc, rows - 1, 0, colour);
 
         if spiral {
-            while sx + 1 < cy { 
-                sx += 1;
-                sy += 1;
+            while sr + 1 < cc { 
+                sr += 1;
+                sc += 1;
                 rows -= inc;
                 cols -= inc;
                 cinc += inc;
 
-                cy = copy.draw_row(sx, cols, cinc, colour);
-                cx = copy.draw_col(sy, rows, cy, colour);
-                sx += 1;
-                cy = copy.draw_row(sx, cols - 1, cx, colour);
-                sy += 1;
-                copy.draw_col(sy, rows - 1, cinc, colour);
+                cc = copy.draw_row(sr, cols, cinc, colour);
+                cr = copy.draw_col(sc, rows, cc, colour);
+                sr += 1;
+                cc = copy.draw_row(sr, cols - 1, cr, colour);
+                sc += 1;
+                copy.draw_col(sc, rows - 1, cinc, colour);
             }
         }
 
@@ -1494,28 +1703,28 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
     pub fn show_matrix(m: &Matrix<Cell>, diff: bool, io: bool) {
         let mut px = 0;
-        for ((x, y), c) in m.items() {
-            if x != px {
+        for ((r, c), cell) in m.items() {
+            if r != px {
                 println!();
-                px = x;
-            } else if y != 0 {
+                px = r;
+            } else if c != 0 {
                 print!(" ");
             }
 
-            let c = c.colour.to_usize();
+            let colour = cell.colour.to_usize();
 
-            if c == 100 {
+            if colour == 100 {
                 print!("{}", if !diff && io { "##" } else { "#" });
-            } else if c == 101 {
+            } else if colour == 101 {
                 print!("{}", if !diff && io { "**" } else { "*" });
             } else if diff && !io {
-                if c >= 10 { print!("#", ) } else { print!("{c}") };
+                if colour >= 10 { print!("#", ) } else { print!("{colour}") };
             } else if !diff && io {
-                print!("{c:0>2}");
+                print!("{colour:0>2}");
             } else if !diff && !io {
-                if c >= 20 { print!("#") } else { print!("{}", c % 10) };
+                if colour >= 20 { print!("#") } else { print!("{}", colour % 10) };
             } else {
-                print!("{}", c % 10);
+                print!("{}", colour % 10);
             }
         }
     }
@@ -1572,7 +1781,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
         let mut nox = false;    // may be only a y axis
 
-        'outerx:
+        'outerr:
         for x in 0 .. self.cells.rows {
             if can_be_black || self.cells[(x, 0)].colour != Black {
                 colour = self.cells[(x, 0)].colour;
@@ -1583,7 +1792,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
             if colour == self.cells[(x, 0)].colour {
                 for c in 0 .. self.cells.columns {
                     if colour != self.cells[(x, c)].colour {
-                        continue 'outerx;
+                        continue 'outerr;
                     }
                     nox = true;
                 }
@@ -1591,7 +1800,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
             }
         }
 
-        'outery:
+        'outerc:
         for y in 0 .. self.cells.columns {
             if nox {
                 if can_be_black || self.cells[(0, y)].colour != Black {
@@ -1603,7 +1812,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
             if colour == self.cells[(0, y)].colour {
                 for r in 0 .. self.cells.rows {
                     if colour != self.cells[(r, y)].colour {
-                        continue 'outery;
+                        continue 'outerc;
                     }
                 }
 
@@ -1626,6 +1835,112 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     // TODO
     pub fn r#move(&self, _direction: (i8, i8)) -> Shape {
         Shape::new_empty()
+    }
+
+    pub fn template_shapes(&self, template: &Self) -> Shapes {
+        let mut shapes = Shapes::new_sized(self.height(), self.width());
+
+        if self.height() % template.height() != 0 || self.width() % template.width() != 0 {
+            return shapes;
+        }
+
+        let rr = self.height() / template.height();
+        let cr = self.width() / template.width();
+
+        for (tr, r) in (0 .. self.height()).step_by(rr).enumerate() {
+            for (tc, c) in (0 .. self.width()).step_by(cr).enumerate() {
+                if template.cells[(tr,tc)].colour != Black {
+                    let sg = self.subgrid(r, rr, c, cr);
+
+                    shapes.shapes.push(sg.as_shape());
+                }
+            }
+        }
+
+        shapes
+    }
+
+    pub fn fill_template(&self, filler: &Shape) -> Grid {
+        let mut shapes = Shapes::new_sized(self.height() * filler.height(), self.width() * filler.width());
+
+        let rr = filler.height();
+        let cr = filler.width();
+
+        for r in 0 .. self.height() {
+            for c in 0 .. self.width() {
+                if self.cells[(r,c)].colour != Black {
+                    let s = filler.to_position(r * rr, c * cr);
+
+                    shapes.shapes.push(s);
+                }
+            }
+        }
+
+        shapes.to_grid()
+    }
+
+    pub fn scale_up(&self, factor: usize) -> Self {
+        let mut cells = Matrix::new(self.cells.rows * factor, self.cells.columns * factor, Cell::new(0, 0, 0));
+
+        for r in 0 .. cells.rows {
+            for c in 0 .. cells.columns {
+                let rf = r / factor;
+                let cf = c / factor;
+
+                cells[(r, c)].row = r;
+                cells[(r, c)].col = c;
+                cells[(r, c)].colour = self.cells[(rf, cf)].colour;
+            }
+        }
+
+        Self::new_from_matrix(&cells)
+    }
+
+    pub fn scale_down(&self, factor: usize) -> Self {
+        let mut cells = Matrix::new(self.cells.rows / factor, self.cells.columns / factor, Cell::new(0, 0, 0));
+
+        for r in 0 .. cells.rows {
+            for c in 0 .. cells.columns {
+                let rf = r * factor;
+                let cf = c * factor;
+
+                cells[(r, c)].row = r;
+                cells[(r, c)].col = c;
+                cells[(r, c)].colour = self.cells[(rf, cf)].colour;
+            }
+        }
+
+        Self::new_from_matrix(&cells)
+    }
+
+    pub fn resize(&self, factor: usize) -> Self {
+        let mut cells = Matrix::new(self.cells.rows * factor, self.cells.columns * factor, Cell::new(0, 0, 0));
+
+        for ((r, c), cell) in self.cells.items() {
+            let rf = r + factor;
+            let cf = c + factor;
+
+            cells[(rf, cf)].row = r;
+            cells[(rf, cf)].col = c;
+            cells[(rf, cf)].colour = cell.colour;
+        }
+
+        Self::new_from_matrix(&cells)
+    }
+
+    pub fn resize_inc(&self, factor: usize) -> Self {
+        let mut cells = Matrix::new(self.cells.rows + factor * 2, self.cells.columns + factor * 2, Cell::new(0, 0, 0));
+
+        for ((r, c), cell) in self.cells.items() {
+            let rf = r + factor;
+            let cf = c + factor;
+
+            cells[(rf, cf)].row = r;
+            cells[(rf, cf)].col = c;
+            cells[(rf, cf)].colour = cell.colour;
+        }
+
+        Self::new_from_matrix(&cells)
     }
 
     pub fn find_patch(&self, patch: &Shape) -> (usize, usize) {
@@ -1656,37 +1971,37 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     pub fn find_colour_patches(&self, colour: Colour) -> Shapes {
         fn mshape(cells: &mut Matrix<Cell>, colour: Colour) -> Option<(usize, usize, Matrix<Cell>)> {
             // Find starting position
-            let xy = cells.items().filter(|(_, c)| c.colour == colour).map(|(pos, _)| pos).min();
+            let rc = cells.items().filter(|(_, cell)| cell.colour == colour).map(|(pos, _)| pos).min();
             //if let Some((0, 0)) = xy {    // This is allowed???
             //    return None;
             //}
 
-            if let Some((x, y)) = xy {
-                let reachable = cells.bfs_reachable((x, y), false, |i| cells[i].colour == colour);
+            if let Some((r, c)) = rc {
+                let reachable = cells.bfs_reachable((r, c), false, |i| cells[i].colour == colour);
 
-                let tlx = *reachable.iter().map(|(x, _)| x).min().unwrap();
-                let tly = *reachable.iter().map(|(_, y)| y).min().unwrap();
-                let brx = *reachable.iter().map(|(x, _)| x).max().unwrap();
-                let bry = *reachable.iter().map(|(_, y)| y).max().unwrap();
+                let tlr = *reachable.iter().map(|(r, _)| r).min().unwrap();
+                let tlc = *reachable.iter().map(|(_, c)| c).min().unwrap();
+                let brr = *reachable.iter().map(|(r, _)| r).max().unwrap();
+                let brc = *reachable.iter().map(|(_, c)| c).max().unwrap();
 
-                let mut m = Matrix::new(brx - tlx + 1, bry - tly + 1, Cell::new(0, 0, 0));
+                let mut m = Matrix::new(brr - tlr + 1, brc - tlc + 1, Cell::new(0, 0, 0));
 
                 // Set all cells to correct position
-                for x in tlx ..= brx {
-                    for y in tly ..= bry {
-                        let cell = &mut m[(x - tlx, y - tly)];
+                for r in tlr ..= brr {
+                    for c in tlc ..= brc {
+                        let cell = &mut m[(r - tlr, c - tlc)];
 
-                        cell.row = x;
-                        cell.col = y;
+                        cell.row = r;
+                        cell.col = c;
                     }
                 }
 
                 // Set cells to correct colour 
-                reachable.iter().for_each(|(x, y)| {
-                    cells[(*x, *y)].colour = NoColour;
+                reachable.iter().for_each(|(r, c)| {
+                    cells[(*r, *c)].colour = NoColour;
                 });
 
-                Some((tlx, tly, m))
+                Some((tlr, tlc, m))
             } else {
                 None
             }
@@ -1695,8 +2010,8 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         let mut shapes = Shapes::new_sized(self.cells.rows, self.cells.columns);
         let mut cells = self.cells.clone();
 
-        while let Some((ox, oy, m)) = mshape(&mut cells, colour) {
-            let s = Shape::new(ox, oy, &m);
+        while let Some((or, oc, m)) = mshape(&mut cells, colour) {
+            let s = Shape::new(or, oc, &m);
 
             shapes.add(&s);
         }
@@ -1716,33 +2031,33 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
 
     fn find_gaps(&self, bg: Colour) -> (Vec<usize>, Vec<usize>) {
-        let mut xs: Vec<usize> = Vec::new();
-        let mut ys: Vec<usize> = Vec::new();
+        let mut rs: Vec<usize> = Vec::new();
+        let mut cs: Vec<usize> = Vec::new();
 
-        xs.push(0);
-        ys.push(0);
+        rs.push(0);
+        cs.push(0);
 
-        let mut lastx: isize = -1;
-        let mut lasty: isize = -1;
+        let mut lastr: isize = -1;
+        let mut lastc: isize = -1;
 
-        for ((x, y), c) in self.cells.items() {
-            if c.colour == bg {
-                if y == 0 {
-                    if (lastx + 1) as usize != x {
-                        xs.push(x);
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == bg {
+                if c == 0 {
+                    if (lastr + 1) as usize != r {
+                        rs.push(r);
                     }
-                    lastx = x as isize;
+                    lastr = r as isize;
                 }
-                if x == 0 {
-                    if (lasty + 1) as usize != y {
-                        ys.push(y);
+                if r == 0 {
+                    if (lastc + 1) as usize != c {
+                        cs.push(c);
                     }
-                    lasty = y as isize;
+                    lastc = c as isize;
                 }
             }
         }
 
-        (xs, ys)
+        (rs, cs)
     }
 
     pub fn toddle_colour(&self, bg: Colour, fg: Colour) -> Self {
@@ -1753,52 +2068,52 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
     pub fn to_shapes_base_bg(&self, bg: Colour) -> Shapes {
         let mut shapes: Vec<Shape> = Vec::new();
-        let (mut xs, mut ys) = self.find_gaps(bg);
+        let (mut rs, mut cs) = self.find_gaps(bg);
 
-        if xs.len() >= 2 && xs[0] == xs[1] || ys.len() > 4 && ys[0] == ys[1] {
+        if rs.len() >= 2 && rs[0] == rs[1] || cs.len() > 4 && cs[0] == cs[1] {
             return Shapes::new();   // Trivial shapes
         }
 
         if self.cells[(self.cells.rows - 1, 0)].colour != bg {
-            xs.push(self.cells.rows);
+            rs.push(self.cells.rows);
         }
         if self.cells[(0, self.cells.columns - 1)].colour != bg {
-            ys.push(self.cells.columns);
+            cs.push(self.cells.columns);
         }
 
-        for i in 0 .. xs.len() - 1 {
-            let mut sx = xs[i];
+        for i in 0 .. rs.len() - 1 {
+            let mut sr = rs[i];
             if i > 0 {
-                sx += 1;
+                sr += 1;
                 // Find start of x range
-                for x in sx .. xs[i + 1] {
+                for x in sr .. rs[i + 1] {
                     if self.cells[(x, 0)].colour != bg {
                         break;
                     }
                 }
             }
 
-            for j in 0 .. ys.len() - 1 {
-                let mut sy = ys[j];
+            for j in 0 .. cs.len() - 1 {
+                let mut sc = cs[j];
                 if j > 0 {
-                    sy += 1;
+                    sc += 1;
                     // Find start of y range
-                    for y in sy .. ys[j + 1] {
+                    for y in sc .. cs[j + 1] {
                         if self.cells[(0, y)].colour != bg {
                             break;
                         }
                     }
                 }
                 // Find shape
-                let xsize = xs[i + 1] - sx;
-                let ysize = ys[j + 1] - sy;
+                let xsize = rs[i + 1] - sr;
+                let ysize = cs[j + 1] - sc;
                 let mut m = Matrix::from_fn(xsize, ysize, |(_, _)| Cell::new_empty());
 
-                for x in sx .. xs[i + 1] {
-                    for y in sy .. ys[j + 1] {
-                        m[(x - sx, y - sy)].row = x;
-                        m[(x - sx, y - sy)].col = y;
-                        m[(x - sx, y - sy)].colour = self.cells[(x, y)].colour;
+                for r in sr .. rs[i + 1] {
+                    for c in sc .. cs[j + 1] {
+                        m[(r - sr, c - sc)].row = r;
+                        m[(r - sr, c - sc)].col = c;
+                        m[(r - sr, c - sc)].colour = self.cells[(r, c)].colour;
                     }
                 }
 
@@ -1821,14 +2136,14 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         }
     }
 
-    pub fn copy_part_matrix(xs: usize, ys: usize, rows: usize, cols: usize, cells: &Matrix<Cell>) -> Matrix<Cell> {
+    pub fn copy_part_matrix(rs: usize, cs: usize, rows: usize, cols: usize, cells: &Matrix<Cell>) -> Matrix<Cell> {
         let mut m = Matrix::new(rows, cols, Cell::new(0, 0, 0));
 
-        for x in 0 .. rows {
-            for y in 0 .. cols {
-                m[(x, y)].row = cells[(xs + x, ys + y)].row;
-                m[(x, y)].col = cells[(xs + x, ys + y)].col;
-                m[(x, y)].colour = cells[(xs + x, ys + y)].colour;
+        for r in 0 .. rows {
+            for c in 0 .. cols {
+                m[(r, c)].row = cells[(rs + r, cs + c)].row;
+                m[(r, c)].col = cells[(rs + r, cs + c)].col;
+                m[(r, c)].colour = cells[(rs + r, cs + c)].colour;
             }
         }
 
@@ -1836,21 +2151,21 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     }
 
     // Split cell composed of 2 cells joined at a corner apart
-    fn de_diag(ox: usize, oy:usize, s: &Shape, shapes: &mut Shapes) {
+    fn de_diag(or: usize, oc: usize, s: &Shape, shapes: &mut Shapes) {
         if s.cells.rows >= 4 && s.cells.rows % 2 == 0 && s.cells.rows == s.cells.columns {
             let hrow = s.cells.rows / 2;
             let hcol = s.cells.columns / 2;
 
             if s.cells[(hrow - 1, hcol - 1)].colour == Black && s.cells[(hrow, hcol)].colour == Black && s.cells[(hrow - 1, hcol)].colour != Black && s.cells[(hrow, hcol - 1)].colour != Black {
                 let m = Self::copy_part_matrix(hrow, 0, hrow, hcol, &s.cells);
-                shapes.add(&Shape::new(ox + hrow, oy, &m));
+                shapes.add(&Shape::new(or + hrow, oc, &m));
                 let m = Self::copy_part_matrix(0, hcol, hrow, hcol, &s.cells);
-                shapes.add(&Shape::new(ox, oy + hcol, &m));
+                shapes.add(&Shape::new(or, oc + hcol, &m));
             } else if s.cells[(hrow - 1, hcol - 1)].colour != Black && s.cells[(hrow, hcol)].colour != Black && s.cells[(hrow - 1, hcol)].colour == Black && s.cells[(hrow, hcol - 1)].colour == Black {
                 let m = Self::copy_part_matrix(0, 0, hrow, hcol, &s.cells);
-                shapes.add(&Shape::new(ox, oy, &m));
+                shapes.add(&Shape::new(or, oc, &m));
                 let m = Self::copy_part_matrix(hrow, hcol, hrow, hcol, &s.cells);
-                shapes.add(&Shape::new(ox + hrow, oy + hcol, &m));
+                shapes.add(&Shape::new(or + hrow, oc + hcol, &m));
             } else {    // Not diagonally opposed shapes
                 shapes.add(s);
             }
@@ -1864,27 +2179,27 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         // TODO Fix training 2204b7a8 - left border
         fn mshape(same_colour: bool, bgc: Colour, bg: Colour, cells: &mut Matrix<Cell>, diag: bool) -> Option<(usize, usize, Matrix<Cell>)> {
             // Find starting position
-            let xy = cells.items().filter(|(_, c)| c.colour != bgc && c.colour != bg).map(|(xy, _)| xy).min();
+            let rc = cells.items().filter(|(_, c)| c.colour != bgc && c.colour != bg).map(|(xy, _)| xy).min();
 
-            if let Some((x, y)) = xy {
-                let start_colour = cells[(x, y)].colour;
-                let reachable = cells.bfs_reachable((x, y), diag, |i| cells[i].colour != bgc && cells[i].colour != bg && (!same_colour || cells[i].colour == start_colour));
+            if let Some((r, c)) = rc {
+                let start_colour = cells[(r, c)].colour;
+                let reachable = cells.bfs_reachable((r, c), diag, |i| cells[i].colour != bgc && cells[i].colour != bg && (!same_colour || cells[i].colour == start_colour));
                 //let mut other: Vec<(usize, usize)> = Vec::new();
 
-                let tlx = *reachable.iter().map(|(x, _)| x).min().unwrap();
-                let tly = *reachable.iter().map(|(_, y)| y).min().unwrap();
-                let brx = *reachable.iter().map(|(x, _)| x).max().unwrap();
-                let bry = *reachable.iter().map(|(_, y)| y).max().unwrap();
+                let tlr = *reachable.iter().map(|(r, _)| r).min().unwrap();
+                let tlc = *reachable.iter().map(|(_, c)| c).min().unwrap();
+                let brr = *reachable.iter().map(|(r, _)| r).max().unwrap();
+                let brc = *reachable.iter().map(|(_, c)| c).max().unwrap();
 
-                let mut m = Matrix::new(brx - tlx + 1, bry - tly + 1, Cell::new(0, 0, 0));
+                let mut m = Matrix::new(brr - tlr + 1, brc - tlc + 1, Cell::new(0, 0, 0));
 
                 // S cells to correct position
-                for x in tlx ..= brx {
-                    for y in tly ..= bry {
-                        let cell = &mut m[(x - tlx, y - tly)];
+                for r in tlr ..= brr {
+                    for c in tlc ..= brc {
+                        let cell = &mut m[(r - tlr, c - tlc)];
 
-                        cell.row = x;
-                        cell.col = y;
+                        cell.row = r;
+                        cell.col = c;
 
                         // Find other same colour objects in bounding box
                         // and add to reachable???
@@ -1896,12 +2211,12 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
                     }
                 }
                 // Set cells to correct colour 
-                reachable.iter().for_each(|(x, y)| {
-                    m[(x - tlx, y - tly)].colour = cells[(*x, *y)].colour;
-                    cells[(*x, *y)].colour = bgc;
+                reachable.iter().for_each(|(r, c)| {
+                    m[(r - tlr, c - tlc)].colour = cells[(*r, *c)].colour;
+                    cells[(*r, *c)].colour = bgc;
                 });
 
-                Some((tlx, tly, m))
+                Some((tlr, tlc, m))
             } else {
                 None
             }
@@ -1921,8 +2236,8 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         if bg == NoColour || bg == Black {
             let bgc = Black;
 
-            while let Some((ox, oy, m)) = mshape(same_colour, bgc, bg, &mut cells, diag) {
-                let s = Shape::new(ox, oy, &m);
+            while let Some((or, oc, m)) = mshape(same_colour, bgc, bg, &mut cells, diag) {
+                let s = Shape::new(or, oc, &m);
 
                 /*
                 // Quit if Background not Black
@@ -1948,7 +2263,7 @@ println!("BG not Black {:?}", s.colour);
                 }
                 */
 
-                Self::de_diag(ox, oy, &s, &mut shapes);
+                Self::de_diag(or, oc, &s, &mut shapes);
             }
         } else {
             shapes = self.to_shapes_base_bg(bg);
@@ -1957,10 +2272,10 @@ println!("BG not Black {:?}", s.colour);
             if shapes.is_empty() {
                 // Not Right???
                 //while let Some((ox, oy, m)) = mshape(same_colour, Black, Black, &mut cells, diag) {
-                while let Some((ox, oy, m)) = mshape(same_colour, Black, bg, &mut cells, diag) {
-                    let s = Shape::new(ox, oy, &m);
+                while let Some((or, oc, m)) = mshape(same_colour, Black, bg, &mut cells, diag) {
+                    let s = Shape::new(or, oc, &m);
 
-                    Self::de_diag(ox, oy, &s, &mut shapes);
+                    Self::de_diag(or, oc, &s, &mut shapes);
                 }
             }
         }
@@ -2042,12 +2357,12 @@ println!("BG not Black {:?}", s.colour);
         Shape::new_cells(&self.cells)
     }
 
-    pub fn as_shape_position(&self, x: usize, y: usize) -> Shape {
+    pub fn as_shape_position(&self, r: usize, c: usize) -> Shape {
         if self.size() == 0 {
             return Shape::trivial();
         }
 
-        Shape::new(x, y, &self.cells)
+        Shape::new(r, c, &self.cells)
     }
 
     pub fn as_shapes(&self) -> Shapes {
@@ -2058,12 +2373,12 @@ println!("BG not Black {:?}", s.colour);
         Shapes::new_from_shape(&Shape::new_cells(&self.cells))
     }
 
-    pub fn as_shapes_position(&self, x: usize, y: usize) -> Shapes {
+    pub fn as_shapes_position(&self, r: usize, c: usize) -> Shapes {
         if self.size() == 0 {
             return Shapes::new();
         }
 
-        Shapes::new_from_shape(&Shape::new(x, y, &self.cells))
+        Shapes::new_from_shape(&Shape::new(r, c, &self.cells))
     }
 
     pub fn as_pixel_shapes(&self) -> Shapes {
@@ -2100,15 +2415,15 @@ println!("BG not Black {:?}", s.colour);
         self.cells.columns
     }
 
-    pub fn row_colour(&self, x: usize) -> Colour {
-        let colour = self.cells[(x,0)].colour;
+    pub fn row_colour(&self, r: usize) -> Colour {
+        let colour = self.cells[(r,0)].colour;
 
-        Self::row_colour_matrix(&self.cells, x, colour)
+        Self::row_colour_matrix(&self.cells, r, colour)
     }
 
-    pub fn row_colour_matrix(m: &Matrix<Cell>, x: usize, colour: Colour) -> Colour {
+    pub fn row_colour_matrix(m: &Matrix<Cell>, r: usize, colour: Colour) -> Colour {
         for y in 1 .. m.columns {
-            if m[(x,y)].colour != colour {
+            if m[(r,y)].colour != colour {
                 return Mixed;
             }
         }
@@ -2116,15 +2431,57 @@ println!("BG not Black {:?}", s.colour);
         colour
     }
 
-    pub fn col_colour(&self, y: usize) -> Colour {
-        let colour = self.cells[(0,y)].colour;
+    pub fn find_pixel(&self, colour: Colour) -> (usize, usize) {
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == colour {
+                return (r, c);
+            }
+        }
 
-        Self::col_colour_matrix(&self.cells, y, colour)
+        (0, 0)
     }
 
-    pub fn col_colour_matrix(m: &Matrix<Cell>, y: usize, colour: Colour) -> Colour {
+    pub fn invert_colour(&self) -> Self {
+        self.invert_colour_new(self.colour)
+    }
+
+    pub fn invert_colour_new(&self, colour: Colour) -> Self {
+        if self.colour == Mixed {
+            return Self::trivial();
+        }
+
+        let mut grid = self.clone();
+
+        for cell in grid.cells.values_mut() {
+            cell.colour = if cell.colour == Black {
+                colour
+            } else {
+                Black
+            };
+        }
+
+        grid
+    }
+
+    pub fn blank(&self) -> Self {
+        let mut shape = self.clone();
+
+        for cell in shape.cells.values_mut() {
+            cell.colour = Black;
+        }
+
+        shape
+    }
+
+    pub fn col_colour(&self, c: usize) -> Colour {
+        let colour = self.cells[(0,c)].colour;
+
+        Self::col_colour_matrix(&self.cells, c, colour)
+    }
+
+    pub fn col_colour_matrix(m: &Matrix<Cell>, c: usize, colour: Colour) -> Colour {
         for x in 1 .. m.rows {
-            if m[(x,y)].colour != colour {
+            if m[(x,c)].colour != colour {
                 return Mixed;
             }
         }
@@ -2141,8 +2498,8 @@ println!("BG not Black {:?}", s.colour);
     }
 
     pub fn is_full(&self) -> bool {
-        for (x, y) in self.cells.keys() {
-            if self.cells[(x, y)].colour == Black {
+        for (r, c) in self.cells.keys() {
+            if self.cells[(r, c)].colour == Black {
                 return false;
             }
         }
@@ -2156,32 +2513,26 @@ println!("BG not Black {:?}", s.colour);
 
     pub fn has_marker_colour(&self, s: &Shape, colour: Colour) -> bool {
         for (r, c) in s.cells.keys() {
-            if r == 0 &&
-                s.orow >= 3 &&
+            if r == 0 && s.orow >= 3 &&
                 self.cells[(s.orow - 1, s.ocol + c)].colour != colour &&
                 self.cells[(s.orow - 2, s.ocol + c)].colour != colour &&
-                self.cells[(s.orow - 3, s.ocol + c)].colour != colour {
-                return true;
-            } else if c == 0 &&
-                s.ocol >= 3 &&
+                self.cells[(s.orow - 3, s.ocol + c)].colour != colour ||
+                c == 0 && s.ocol >= 3 &&
                 self.cells[(s.orow + r, s.ocol - 1)].colour != colour &&
                 self.cells[(s.orow + r, s.ocol - 2)].colour != colour &&
-                self.cells[(s.orow + r, s.ocol - 3)].colour != colour {
-                return true;
-            } else if r == s.cells.rows - 1 &&      // Todo: Check
+                self.cells[(s.orow + r, s.ocol - 3)].colour != colour ||
+                r == s.cells.rows - 1 &&
                 s.orow + s.cells.rows < self.cells.rows - 3 &&
                 self.cells[(s.orow + 1, s.ocol + c)].colour != colour &&
                 self.cells[(s.orow + 2, s.ocol + c)].colour != colour &&
-                self.cells[(s.orow + 3, s.ocol + c)].colour != colour {
-//println!("{} {}", s.orow + 1, s.ocol + c);
-                return true;
-            } else if c == s.cells.columns - 1 &&
+                self.cells[(s.orow + 3, s.ocol + c)].colour != colour ||
+                c == s.cells.columns - 1 &&
                 s.ocol + s.cells.columns < self.cells.columns - 3 &&
                 self.cells[(s.orow + r, s.ocol + c + 1)].colour != colour &&
                 self.cells[(s.orow + r, s.ocol + c + 2)].colour != colour &&
                 self.cells[(s.orow + r, s.ocol + c + 3)].colour != colour {
-                return true;
-            }
+                    return true;
+                }
         }
 
         false
@@ -2196,7 +2547,7 @@ println!("BG not Black {:?}", s.colour);
         new_shapes.shapes = Vec::new();
 
         for s in shapes.shapes.iter() {
-            if s.is_full() && grid.has_marker_colour(&s, NoColour) {
+            if s.is_full() && grid.has_marker_colour(s, NoColour) {
                 let s = s.recolour(NoColour, Black);
                 new_shapes.shapes.push(s.clone());
             }
@@ -2217,15 +2568,15 @@ println!("BG not Black {:?}", s.colour);
 
         let mut has_black = false;
 
-        for x in 0 .. grid.cells.rows {
-            let mut prev = grid.cells[(x, 0)].colour;
+        for r in 0 .. grid.cells.rows {
+            let mut prev = grid.cells[(r, 0)].colour;
 
             if !has_black {
                 has_black = prev == Black;
             }
 
-            for y in 1 .. grid.cells.columns {
-                let next = grid.cells[(x, y)].colour;
+            for c in 1 .. grid.cells.columns {
+                let next = grid.cells[(r, c)].colour;
 
                 if prev != next && next == Black {
                     return false;
@@ -2277,9 +2628,9 @@ println!("BG not Black {:?}", s.colour);
 
         shape.colour = NoColour;
 
-        for c in shape.cells.values_mut() {
-            if c.colour != Black {
-                c.colour = NoColour;
+        for cell in shape.cells.values_mut() {
+            if cell.colour != Black {
+                cell.colour = NoColour;
             }
         }
 
@@ -2297,8 +2648,8 @@ println!("BG not Black {:?}", s.colour);
             return false;
         }
 
-        for ((sx, sy), (ox, oy)) in self.cells.keys().zip(other.cells.keys()) {
-            if sx != ox || sy != oy {
+        for ((sr, sc), (or, oc)) in self.cells.keys().zip(other.cells.keys()) {
+            if sr != or || sc != oc {
                 return false;
             }
         }
@@ -2511,9 +2862,9 @@ println!("BG not Black {:?}", s.colour);
 
         let mut newg = other.clone();
 
-        for (((x, y), c1), ((_, _), c2)) in self.cells.items().zip(other.cells.items()) {
+        for (((r, c), c1), ((_, _), c2)) in self.cells.items().zip(other.cells.items()) {
             if c1.colour != c2.colour {
-                newg.cells[(x, y)].colour = if c1.colour == Black { 
+                newg.cells[(r, c)].colour = if c1.colour == Black { 
                     c2.colour + ToBlack
                 } else if c2.colour == Black { 
                     c1.colour + FromBlack
@@ -2523,11 +2874,31 @@ println!("BG not Black {:?}", s.colour);
                     c1.colour + OrigBlack
                 };
             } else if c1.colour != Black && c1.colour == c2.colour { 
-                newg.cells[(x, y)].colour = c1.colour + SameBlack;
+                newg.cells[(r, c)].colour = c1.colour + SameBlack;
             }
         }
 
         Some(newg)
+    }
+
+    pub fn distance(&self, other: &Self) -> f64 {
+        let diff = self.diff_impl(other, true);
+
+        // different shapes
+        if diff.is_none() {
+            return -1.0;
+        }
+
+        let diff = diff.unwrap();
+        let mut cnt = 0;
+
+        for cell in diff.cells.values() {
+            if cell.colour == Black || cell.colour.is_same() {
+                cnt += 1;
+            }
+        }
+
+        cnt as f64 / diff.size() as f64
     }
 
 /*
@@ -2673,11 +3044,11 @@ println!("BG not Black {:?}", s.colour);
     pub fn to_json(&self) -> String {
         let mut grid: Vec<Vec<usize>> = vec![vec![0; self.cells.columns]; self.cells.rows];
 
-        for x in 0 .. self.cells.rows {
-            for y in 0 .. self.cells.columns {
-                let colour: usize = self.cells[(x, y)].colour.to_usize();
+        for r in 0 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                let colour: usize = self.cells[(r, c)].colour.to_usize();
 
-                grid[x][y] = colour;
+                grid[r][c] = colour;
             }
         }
 
@@ -2687,11 +3058,11 @@ println!("BG not Black {:?}", s.colour);
     pub fn to_vec(&self) -> Vec<Vec<usize>> {
         let mut grid: Vec<Vec<usize>> = vec![vec![0; self.cells.columns]; self.cells.rows];
 
-        for x in 0 .. self.cells.rows {
-            for y in 0 .. self.cells.columns {
-                let colour: usize = self.cells[(x, y)].colour.to_usize();
+        for r in 0 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                let colour: usize = self.cells[(r, c)].colour.to_usize();
 
-                grid[x][y] = colour;
+                grid[r][c] = colour;
             }
         }
 
@@ -2733,17 +3104,17 @@ println!("BG not Black {:?}", s.colour);
     }
 
     pub fn split_4(&self) -> Vec<Self> {
-        let hx = self.cells.rows / 2;
-        let hy = self.cells.columns / 2;
+        let hr = self.cells.rows / 2;
+        let hc = self.cells.columns / 2;
 
-        if hx == 0 || hy == 0 || self.cells.rows % 2 != 0 || self.cells.columns % 2 != 0 {
+        if hr == 0 || hc == 0 || self.cells.rows % 2 != 0 || self.cells.columns % 2 != 0 {
             return Vec::new();
         }
 
-        let s1 = self.subgrid(0, hx, 0, hy);
-        let s2 = self.subgrid(0, hx, self.cells.columns - hy, hy);
-        let s3 = self.subgrid(self.cells.rows - hx, hx, 0, hy);
-        let s4 = self.subgrid(self.cells.rows - hx, hx, self.cells.columns - hy, hy);
+        let s1 = self.subgrid(0, hr, 0, hc);
+        let s2 = self.subgrid(0, hr, self.cells.columns - hc, hc);
+        let s3 = self.subgrid(self.cells.rows - hr, hr, 0, hc);
+        let s4 = self.subgrid(self.cells.rows - hr, hr, self.cells.columns - hc, hc);
 
         vec![s1, s2, s3, s4]
     }
@@ -2751,20 +3122,20 @@ println!("BG not Black {:?}", s.colour);
     pub fn split_4_inline(&self, delimiter: bool) -> Shapes {
         let rows = self.cells.rows;
         let cols = self.cells.columns;
-        let mut dx = if delimiter { 1 } else { 0 };
-        let mut dy = if delimiter { 1 } else { 0 };
+        let mut dr = if delimiter { 1 } else { 0 };
+        let mut dc = if delimiter { 1 } else { 0 };
         let mut shapes = Shapes::new_sized(rows, cols);
 
-        if rows % 4 != 0 && cols % 4 != 0 || rows < dx * 3 || cols < dy * 3 {
+        if rows % 4 != 0 && cols % 4 != 0 || rows < dr * 3 || cols < dc * 3 {
             return shapes;
         }
 //println!("1 {rows} {cols}");
         // too strict?
-        if ((rows - dx * 3) % 4 != 0 || cols % 4 != 0) &&
-            (rows % 4 != 0 || (cols - dy * 3) % 4 != 0) {
+        if ((rows - dr * 3) % 4 != 0 || cols % 4 != 0) &&
+            (rows % 4 != 0 || (cols - dc * 3) % 4 != 0) {
             //return shapes;
-            dx = 0;
-            dy = 0;
+            dr = 0;
+            dc = 0;
         }
 //println!("2 {rows} {cols}");
         /*
@@ -2773,28 +3144,62 @@ println!("BG not Black {:?}", s.colour);
         let (s1, s2, s3, s4) = if rows > cols {
             let qx = rows / 4;
             if qx * 4 >= rows {
-                dx = 0;
+                dr = 0;
             }
 
             (self.subgrid(0, qx, 0, cols),
-            self.subgrid(qx + dx, qx, 0, cols),
-            self.subgrid((qx + dx) * 2, qx, 0, cols),
-            self.subgrid((qx + dx) * 3, qx, 0, cols))
+            self.subgrid(qx + dr, qx, 0, cols),
+            self.subgrid((qx + dr) * 2, qx, 0, cols),
+            self.subgrid((qx + dr) * 3, qx, 0, cols))
         } else {
             let qy = cols / 4;
             if qy * 4 >= cols {
-                dy = 0;
+                dc = 0;
             }
 
             (self.subgrid(0, rows, 0, qy),
-            self.subgrid(0, rows, qy + dy, qy),
-            self.subgrid(0, rows, (qy + dy) * 2, qy),
-            self.subgrid(0, rows, (qy + dy) * 3, qy))
+            self.subgrid(0, rows, qy + dc, qy),
+            self.subgrid(0, rows, (qy + dc) * 2, qy),
+            self.subgrid(0, rows, (qy + dc) * 3, qy))
         };
 
         shapes.shapes = vec![s1.as_shape(), s2.as_shape(), s3.as_shape(), s4.as_shape()];
 
         shapes
+    }
+
+    pub fn full_row(&self, shape: &Shape) -> bool {
+        shape.orow == 0 && shape.cells.rows == self.cells.rows
+    }
+
+    pub fn full_col(&self, shape: &Shape) -> bool {
+        shape.ocol == 0 && shape.cells.columns == self.cells.columns
+    }
+
+    pub fn full_dim_split(&self, shapes: &Shapes) -> (Colour, Shapes) {
+        let mut div_colour = NoColour;
+        let mut horizontal = false;
+        let mut shapes = shapes.clone();
+
+        for s in shapes.shapes.iter_mut() {
+            if self.full_row(s) {
+                horizontal = true;
+                s.to_position_mut(s.orow, s.ocol * 2 + 1);
+                div_colour = s.colour;
+            } else if self.full_col(s) {
+                horizontal = false;
+                s.to_position_mut(s.orow * 2 + 1, s.ocol);
+                div_colour = s.colour;
+            }
+        }
+
+        if horizontal {
+            shapes.shapes.sort_by(|a,b| (a.ocol,a.orow).cmp(&(b.ocol,b.orow)));
+        } else {
+            shapes.shapes.sort_by(|a,b| (a.orow,a.ocol).cmp(&(b.orow,b.ocol)));
+        }
+
+        (div_colour, shapes)
     }
 
     pub fn split_2(&self) -> Shapes {
@@ -2803,19 +3208,19 @@ println!("BG not Black {:?}", s.colour);
         }
 
         let mut shapes = Shapes::new_sized(self.cells.rows, self.cells.columns);
-        let hx = self.cells.rows / 2;
-        let hy = self.cells.columns / 2;
+        let hr = self.cells.rows / 2;
+        let hc = self.cells.columns / 2;
 
         //let s1 = if self.cells.rows % 2 == 0 {
         let s1 = if self.cells.rows > self.cells.columns {
-            self.subgrid(0, hx, 0, self.cells.columns)
+            self.subgrid(0, hr, 0, self.cells.columns)
         } else {
-            self.subgrid(0, self.cells.rows, 0, hy)
+            self.subgrid(0, self.cells.rows, 0, hc)
         };
         let s2 = if self.cells.rows > self.cells.columns {
-            self.subgrid(hx, self.cells.rows - hx, 0, self.cells.columns)
+            self.subgrid(hr, self.cells.rows - hr, 0, self.cells.columns)
         } else {
-            self.subgrid(0, self.cells.rows, hy, self.cells.columns - hy)
+            self.subgrid(0, self.cells.rows, hc, self.cells.columns - hc)
         };
 
         shapes.shapes = vec![s1.as_shape(), s2.as_shape()];
@@ -2827,8 +3232,8 @@ println!("BG not Black {:?}", s.colour);
         if self.cells.rows == 0 {
             return false;
         }
-        for c in self.cells.values() {
-            if c.colour == Black {
+        for cell in self.cells.values() {
+            if cell.colour == Black {
                 return false;
             }
         }
@@ -2836,9 +3241,9 @@ println!("BG not Black {:?}", s.colour);
         true
     }
 
-    pub fn get_patch(&self, x: usize, y: usize, rows: usize, cols: usize) -> Shape {
-        match self.cells.slice(x .. x + rows, y .. y + cols) {
-            Ok(m) => Shape::new(x, y, &m),
+    pub fn get_patch(&self, r: usize, c: usize, rows: usize, cols: usize) -> Shape {
+        match self.cells.slice(r .. r + rows, c .. c + cols) {
+            Ok(m) => Shape::new(r, c, &m),
             Err(_e) => {
                 //eprintln!("{e}");
 
@@ -2848,16 +3253,14 @@ println!("BG not Black {:?}", s.colour);
 
     }
 
-    pub fn fill_patch_mut(&mut self, other: &Shape, ox: usize, oy: usize) {
+    pub fn fill_patch_mut(&mut self, other: &Shape, or: usize, oc: usize) {
         if self.size() <= other.size() {
             return;
         }
-//println!("{} {}", ox, oy);
 
-        for (x, y) in other.cells.keys() {
-//println!("{:?}", self.cells[(ox + x, oy + y)].colour);
-            if self.cells[(ox + x, oy + y)].colour == Black {
-                self.cells[(ox + x, oy + y)].colour = other.cells[(x, y)].colour;
+        for (r, c) in other.cells.keys() {
+            if self.cells[(or + r, oc + c)].colour == Black {
+                self.cells[(or + r, oc + c)].colour = other.cells[(r, c)].colour;
             }
         }
     }

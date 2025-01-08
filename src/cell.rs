@@ -4,7 +4,7 @@ use num_traits::identities::Zero;
 use crate::cats::Colour::*;
 use crate::cats::{Colour, CellCategory};
 
-#[derive(Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct Cell {
     pub row: usize,
     pub col: usize,
@@ -52,6 +52,8 @@ impl PartialEq for Cell {
         (self.row, &self.col) == (other.row, &other.col)
     }
 }
+
+impl Eq for Cell {}
 
 impl Cell {
     pub fn new(x: usize, y: usize, colour: usize) -> Self {

@@ -124,7 +124,7 @@ pub fn difference(exs: &Examples) {
 pub fn permutations(v: &[usize]) -> Vec<Vec<&usize>> {
     let mut perms: Vec<Vec<&usize>> = Vec::new();
 
-    for perm in v.iter().permutations(v.len()).unique().map(|p| p) {
+    for perm in v.iter().permutations(v.len()).unique() {
         perms.push(perm);
     }
 

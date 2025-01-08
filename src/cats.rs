@@ -259,6 +259,42 @@ impl Colour {
         *self >= Self::OrigBlack && *self <= Self::OrigBrown
     }
 
+    pub fn and(&self, other: &Self) -> Self {
+        if *self == Self::Black || *other == Self::Black || self != other {
+            Self::Black
+        } else {
+            *self
+        }
+    }
+
+    pub fn or(&self, other: &Self) -> Self {
+        if *self == Self::Black {
+            if *other == Self::Black {
+                Self::Black
+            } else {
+                *other
+            }
+        } else if *other == Self::Black || *self == *other {
+            *self
+        } else {
+            Self::Black
+        }
+    }
+
+    pub fn xor(&self, other: &Self) -> Self {
+        if *self == Self::Black {
+            if *other == Self::Black {
+                Self::Black
+            } else {
+                *other
+            }
+        } else if *other == Self::Black {
+            *self
+        } else {
+            Self::Black
+        }
+    }
+
     pub fn single_colour_vec(v: &[Self]) -> bool {
         if v.is_empty() {
             return false;
@@ -276,7 +312,11 @@ impl Colour {
     }
 
     pub fn all_colours() -> BTreeSet<Self> {
-        (0 ..= 9).map(|c| Colour::from_usize(c)).collect()
+        (0 ..= 9).map(Colour::from_usize).collect()
+    }
+
+    pub fn get_position(&self, v: &[Colour]) -> usize {
+        v.iter().position(|&ac| ac == *self).unwrap_or(0)
     }
 }
 
@@ -309,6 +349,7 @@ pub enum GridCategory {
     MirrorXOutSkewR,
     MirrorYOutSkewR,
     */
+    HasArms,
     BareCornersIn,
     BareCornersOut,
     BGGridInBlack,
@@ -775,9 +816,6 @@ impl CellCategory {
     }
 
     pub fn has_point(self) -> bool {
-        match self {
-            Self::PointT | Self::PointB | Self::PointL | Self::PointR => true,
-            _ => false,
-        }
+        matches!(self, Self::PointT | Self::PointB | Self::PointL | Self::PointR)
     }
 }

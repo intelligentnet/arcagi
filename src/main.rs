@@ -9,11 +9,11 @@ fn main() -> ExitCode {
         eprintln!("Where:");
         eprintln!("Run type: training | evaluation | test");
         eprintln!("task: name of task which is 8 hex digits");
-        eprintln!("      optionally followed by '/' experiment to run");
+        eprintln!("      optionally followed by '/' the experiment to run");
         eprintln!("      experiment is the number of the experiment");
-        eprintln!("      task can be 'all'");
+        eprintln!("      task is hex name or can be 'all'");
         eprintln!("Transformation: if 'all' will run all transformations");
-        eprintln!("all: if 'all' will run all experiment for all tasks");
+        eprintln!("all: if 'all' will run all experiments for all tasks");
 
         return ExitCode::from(1);
     }

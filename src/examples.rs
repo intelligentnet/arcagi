@@ -186,15 +186,17 @@ impl Example {
                 cats.insert(NxNOut(out_dim.0));
             }
         }
-        if in_dim.0 % out_dim.0 == 0 && in_dim.0 != out_dim.0 {
-            cats.insert(OutXInWidth(in_dim.0 / out_dim.0));
-        } else if in_dim.0 % out_dim.0 == 0 && in_dim.0 != out_dim.0 {
-            cats.insert(OutXInHeight(in_dim.1 / out_dim.1));
-        }
-        if out_dim.0 % in_dim.0 == 0 && out_dim.0 != in_dim.0 {
-            cats.insert(InXOutWidth(out_dim.0 / in_dim.0));
-        } else if out_dim.0 % in_dim.0 == 0 && out_dim.0 != in_dim.0 {
-            cats.insert(InXOutHeight(out_dim.1 / in_dim.1));
+        if out_dim.0 > 0 {
+            if in_dim.0 % out_dim.0 == 0 && in_dim.0 != out_dim.0 {
+                cats.insert(OutXInWidth(in_dim.0 / out_dim.0));
+            } else if in_dim.1 % out_dim.1 == 0 && in_dim.1 != out_dim.1 {
+                cats.insert(OutXInHeight(in_dim.1 / out_dim.1));
+            }
+            if out_dim.0 % in_dim.0 == 0 && out_dim.0 != in_dim.0 {
+                cats.insert(InXOutWidth(out_dim.0 / in_dim.0));
+            } else if out_dim.1 % in_dim.1 == 0 && out_dim.1 != in_dim.1 {
+                cats.insert(InXOutHeight(out_dim.1 / in_dim.1));
+            }
         }
         if out_dim.0 == 1 && out_dim.1 == 1 {
             cats.insert(SinglePixelOut);
@@ -558,13 +560,21 @@ eprintln!("here");
         let in_colours = self.input.grid.cell_colour_cnt_map();
         let out_colours = self.output.grid.cell_colour_cnt_map();
 
-        let remainder: Vec<_> = out_colours.keys().filter(|k| !in_colours.contains_key(k)).collect();
+        let remainder: Vec<_> = if out_colours.len() > in_colours.len() {
+            out_colours.keys().filter(|k| !in_colours.contains_key(k)).collect()
+        } else {
+            in_colours.keys().filter(|k| !out_colours.contains_key(k)).collect()
+        };
 
         if remainder.len() == 1 {
             *remainder[0]
         } else {
             NoColour
         }
+    }
+
+    pub fn in_dimensions(&self) -> (usize, usize) {
+        self.input.grid.dimensions()
     }
 }
 
@@ -692,6 +702,30 @@ impl Examples {
         self.full_shapes(false, true)
     }
 
+    pub fn common(&self, input: bool) -> Grid {
+        let mut grid = Grid::trivial();
+
+        for ex in self.examples.iter() {
+            let g = if input {
+                &ex.input.grid
+            } else {
+                &ex.output.grid
+            };
+
+            if grid == Grid::trivial() {
+                grid = g.clone();
+            } else if grid.dimensions() != g.dimensions() {
+                return Grid::trivial();
+            } else {
+                for (c1, c2) in g.cells.values().zip(grid.cells.values_mut()) {
+                    c2.colour = c1.colour.and(&c2.colour);
+                }
+            }
+        }
+
+        grid
+    }
+
     pub fn all_shapes(&self, input: bool, sq: bool) -> Shapes {
         let mut shapes: Vec<Shape> = Vec::new();
 
@@ -786,9 +820,9 @@ impl Examples {
 
         for ex in self.examples.iter() {
             let h = ex.input.grid.cell_colour_cnt_map();
-            let v: BTreeSet<Colour> = h.keys().map(|c| *c).collect();
+            let v: BTreeSet<Colour> = h.keys().copied().collect();
 
-            common = common.intersection(&v).map(|c| *c).collect();
+            common = common.intersection(&v).copied().collect();
         }
 
         Vec::from_iter(common)
@@ -799,9 +833,9 @@ impl Examples {
 
         for ex in self.examples.iter() {
             let h = ex.output.grid.cell_colour_cnt_map();
-            let v: BTreeSet<Colour> = h.keys().map(|c| *c).collect();
+            let v: BTreeSet<Colour> = h.keys().copied().collect();
 
-            common = common.intersection(&v).map(|c| *c).collect();
+            common = common.intersection(&v).copied().collect();
         }
 
         Vec::from_iter(common)
@@ -812,7 +846,7 @@ impl Examples {
 
         for ex in self.examples.iter() {
             let h = ex.output.grid.cell_colour_cnt_map();
-            let v: Vec<Colour> = h.keys().map(|c| *c).collect();
+            let v: Vec<Colour> = h.keys().copied().collect();
 
             common = Union::union(&common, v);
         }
@@ -825,7 +859,7 @@ impl Examples {
 
         for ex in self.examples.iter() {
             let h = ex.input.grid.cell_colour_cnt_map();
-            let v: Vec<Colour> = h.keys().map(|c| *c).collect();
+            let v: Vec<Colour> = h.keys().copied().collect();
 
             common = Union::union(&common, v);
         }
@@ -834,10 +868,28 @@ impl Examples {
     }
 
     pub fn io_colour_diff(&self) -> Vec<Colour> {
+        let in_colours = self.find_all_input_colours();
+        let out_colours = self.find_all_output_colours();
+
+        Uniq::uniq(&out_colours, in_colours)
+    }
+
+    pub fn io_all_colour_diff(&self) -> Vec<Colour> {
+        let in_colours = self.find_all_input_colours();
+        let out_colours = self.find_all_output_colours();
+
+        if out_colours.len() > in_colours.len() {
+            Uniq::uniq(&out_colours, in_colours)
+        } else {
+            Uniq::uniq(&in_colours, out_colours)
+        }
+    }
+
+    pub fn io_colour_common(&self) -> Vec<Colour> {
         let in_colours = self.find_input_colours();
         let out_colours = self.find_output_colours();
 
-        Uniq::uniq(&out_colours, in_colours)
+        Union::union(&out_colours, in_colours)
     }
 
     pub fn io_common_row_colour(&self) -> Colour {
@@ -930,6 +982,40 @@ impl Examples {
         }
 
         h
+    }
+
+    pub fn in_max_size(&self) -> (usize, usize) {
+        let mut rs = 0;
+        let mut cs = 0;
+
+        for ex in self.examples.iter() {
+            let (r, c) = ex.in_dimensions();
+
+            (rs, cs) = (rs, cs).max((r, c));
+        }
+
+        (rs, cs)
+    }
+
+    pub fn derive_missing_rule(&self) -> Grid {
+        let mut i_rs = 0;
+        let mut i_cs = 0;
+        let mut in_grid = Grid::trivial();
+        let mut out_grid = Grid::trivial();
+
+        // Find largest with one pixel
+        for ex in self.examples.iter() {
+            let grid = &ex.input.grid;
+
+            if grid.is_square() && grid.pixels() == 1 && grid.cells[(grid.cells.rows / 2, grid.cells.columns / 2)].colour != Black {
+                (i_rs, i_cs) = (i_rs, i_cs).max((grid.cells.rows, grid.cells.columns));
+
+                in_grid = ex.input.grid.clone();
+                out_grid = ex.output.grid.clone();
+            }
+        }
+
+        in_grid.derive_missing_rule(&out_grid)
     }
 }
 
