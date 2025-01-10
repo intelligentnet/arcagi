@@ -202,10 +202,10 @@ impl Shape {
 
         s.colour = Mixed;
 
-        for x in 0 .. s.cells.rows {
-            for y in 0 .. s.cells.columns {
-                s.cells[(x,y)].row = s.orow + x;
-                s.cells[(x,y)].col = s.ocol + y;
+        for r in 0 .. s.cells.rows {
+            for c in 0 .. s.cells.columns {
+                s.cells[(r,c)].row = s.orow + r;
+                s.cells[(r,c)].col = s.ocol + c;
             }
         }
 
@@ -241,8 +241,8 @@ impl Shape {
             return false;
         }
 
-        for (xy, c) in self.cells.items() {
-            if c.colour != Black && c.colour != other.cells[xy].colour {
+        for (rc, c) in self.cells.items() {
+            if c.colour != Black && c.colour != other.cells[rc].colour {
                 return false;
             }
         }
@@ -257,9 +257,9 @@ impl Shape {
 
         let mut shape = self.clone();
 
-        for xy in self.cells.keys() {
-            if self.cells[xy].colour == Black {
-                shape.cells[xy].colour = other.cells[xy].colour;
+        for rc in self.cells.keys() {
+            if self.cells[rc].colour == Black {
+                shape.cells[rc].colour = other.cells[rc].colour;
             }
         }
         
@@ -275,18 +275,18 @@ impl Shape {
     }
 
     // must be odd size
-    pub fn new_square(x: usize, y: usize, size: usize, colour: Colour) -> Self {
+    pub fn new_square(r: usize, c: usize, size: usize, colour: Colour) -> Self {
         let mut square = Self::new_sized_coloured(size, size, Black);
 
         square.colour = colour;
 
-        for (x, y) in square.cells.keys() {
-            if x == 0 || y == 0 || x == square.cells.rows - 1 || y == square.cells.columns - 1 {
-                square.cells[(x, y)].colour = colour;
+        for (r, c) in square.cells.keys() {
+            if r == 0 || c == 0 || r == square.cells.rows - 1 || c == square.cells.columns - 1 {
+                square.cells[(r, c)].colour = colour;
             }
         }
 
-        square.translate_absolute(x, y)
+        square.translate_absolute(r, c)
     }
 
     pub fn is_trivial(&self) -> bool {
@@ -308,10 +308,10 @@ impl Shape {
             s.orow += self.orow;
             s.ocol += self.ocol;
 
-            for x in 0 .. s.cells.rows {
-                for y in 0 .. s.cells.columns {
-                    s.cells[(x,y)].row += self.orow;
-                    s.cells[(x,y)].col += self.ocol;
+            for r in 0 .. s.cells.rows {
+                for c in 0 .. s.cells.columns {
+                    s.cells[(r,c)].row += self.orow;
+                    s.cells[(r,c)].col += self.ocol;
                 }
             }
         }
@@ -448,9 +448,9 @@ impl Shape {
 
         let mut shape = self.clone();
 
-        for ((x, y), c) in self.cells.items() {
-            if c.colour == bg && (x == 0 || y == 0 || x == self.cells.rows - 1 || y == self.cells.columns - 1) {
-                shape.flood_fill_mut(x, y, NoColour, self.colour);
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == bg && (r == 0 || c == 0 || r == self.cells.rows - 1 || c == self.cells.columns - 1) {
+                shape.flood_fill_mut(r, c, NoColour, self.colour);
             }
         }
 
@@ -483,16 +483,16 @@ impl Shape {
     }
     */
 
-    pub fn flood_fill(&self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
+    pub fn flood_fill(&self, r: usize, c: usize, ignore_colour: Colour, new_colour: Colour) -> Self {
         let mut shape = self.clone();
 
-        shape.flood_fill_mut(x, y, ignore_colour, new_colour);
+        shape.flood_fill_mut(r, c, ignore_colour, new_colour);
 
         shape
     }
 
-    pub fn flood_fill_mut(&mut self, x: usize, y: usize, ignore_colour: Colour, new_colour: Colour) {
-        let reachable = self.cells.bfs_reachable((x, y), false, |i| self.cells[i].colour == Black || self.cells[i].colour == ignore_colour);
+    pub fn flood_fill_mut(&mut self, r: usize, c: usize, ignore_colour: Colour, new_colour: Colour) {
+        let reachable = self.cells.bfs_reachable((r, c), false, |i| self.cells[i].colour == Black || self.cells[i].colour == ignore_colour);
 
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour);
     }
@@ -501,17 +501,17 @@ impl Shape {
         let crc = Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest = crc.digest();
 
-        for ((x, y), c) in m.items() {
-            let colour = if c.colour == Black {
+        for ((r, c), cell) in m.items() {
+            let colour = if cell.colour == Black {
                 Black
             } else if coloured {
-                c.colour
+                cell.colour
             } else {
                 Mixed 
             };
 
-            digest.update(&x.to_ne_bytes());
-            digest.update(&y.to_ne_bytes());
+            digest.update(&r.to_ne_bytes());
+            digest.update(&c.to_ne_bytes());
             digest.update(&Colour::to_usize(colour).to_ne_bytes());
         }
 
@@ -565,8 +565,8 @@ impl Shape {
             return false;
         }
 
-        for (((sx, sy), c1), ((ox, oy), c2)) in self.cells.items().zip(other.cells.items()) {
-            if sx != ox || sy != oy || (c1.colour == Black && c2.colour != Black) || (c1.colour != Black && c2.colour == Black) {
+        for (((sr, sc), c1), ((or, oc), c2)) in self.cells.items().zip(other.cells.items()) {
+            if sr != or || sc != oc || (c1.colour == Black && c2.colour != Black) || (c1.colour != Black && c2.colour == Black) {
                 return false;
             }
         }
@@ -610,16 +610,16 @@ impl Shape {
         true
     }
 
-    pub fn subshape_remain(&self, tlx: usize, sx: usize, tly: usize, sy: usize) -> Self {
-        let mut s = self.subshape(tlx, sx, tly, sy);
+    pub fn subshape_remain(&self, tlr: usize, sr: usize, tlc: usize, sc: usize) -> Self {
+        let mut s = self.subshape(tlr, sr, tlc, sc);
 
-        s.orow = self.orow + tlx;
-        s.ocol = self.ocol + tly;
+        s.orow = self.orow + tlr;
+        s.ocol = self.ocol + tlc;
 
-        for x in 0 .. s.cells.rows {
-            for y in 0 .. s.cells.columns {
-                s.cells[(x,y)].row = s.orow + x;
-                s.cells[(x,y)].col = s.ocol + y;
+        for r in 0 .. s.cells.rows {
+            for c in 0 .. s.cells.columns {
+                s.cells[(r,c)].row = s.orow + r;
+                s.cells[(r,c)].col = s.ocol + c;
             }
         }
 
@@ -635,42 +635,42 @@ impl Shape {
     }
 
     pub fn above(&self, other: &Self) -> bool {
-        let (sx, sy) = self.centre_of_exact();
-        let (ox, oy) = other.centre_of_exact();
+        let (sr, sc) = self.centre_of_exact();
+        let (or, oc) = other.centre_of_exact();
 //println!("{:?} {:?}", self.centre_of(), other.centre_of());
         
-        sx < ox && (sx - ox).abs() > (sy - oy).abs()
+        sr < or && (sr - or).abs() > (sc - oc).abs()
     }
 
     pub fn below(&self, other: &Self) -> bool {
-        let (sx, sy) = self.centre_of_exact();
-        let (ox, oy) = other.centre_of_exact();
+        let (sr, sc) = self.centre_of_exact();
+        let (or, oc) = other.centre_of_exact();
         
-        sx > ox && (sx - ox).abs() > (sy - oy).abs()
+        sr > or && (sr - or).abs() > (sc - oc).abs()
     }
 
     pub fn right(&self, other: &Self) -> bool {
-        let (sx, sy) = self.centre_of_exact();
-        let (ox, oy) = other.centre_of_exact();
+        let (sr, sc) = self.centre_of_exact();
+        let (or, oc) = other.centre_of_exact();
         
-        sy < oy && (sx - ox).abs() < (sy - oy).abs()
+        sc < oc && (sr - or).abs() < (sc - oc).abs()
     }
 
     pub fn left(&self, other: &Self) -> bool {
-        let (sx, sy) = self.centre_of_exact();
-        let (ox, oy) = other.centre_of_exact();
+        let (sr, sc) = self.centre_of_exact();
+        let (or, oc) = other.centre_of_exact();
         
-        sy > oy && (sx - ox).abs() < (sy - oy).abs()
+        sc > oc && (sr - or).abs() < (sc - oc).abs()
     }
 
     pub fn diag(&self, other: &Self) -> bool {
-        let (sx, sy) = self.centre_of();
-        let (ox, oy) = other.centre_of();
+        let (sr, sc) = self.centre_of();
+        let (or, oc) = other.centre_of();
         
-        let dx = if sx > ox { sx - ox } else { ox - sx };
-        let dy = if sy > oy { sy - oy } else { oy - sy };
+        let dr = if sr > or { sr - or } else { or - sr };
+        let dc = if sc > oc { sc - oc } else { oc - sc };
 
-        dx == dy
+        dr == dc
     }
 
     pub fn orientation_horizontal(&self) -> Option<bool> {
@@ -803,9 +803,9 @@ impl Shape {
     pub fn colour_position(&self, colour: Colour) -> Vec<(usize, usize)> {
         let mut ans: Vec<(usize, usize)> = Vec::new();
 
-        for ((x, y), c) in self.cells.items() {
-            if c.colour == colour {
-                ans.push((x, y));
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == colour {
+                ans.push((r, c));
             }
         }
 
@@ -1041,9 +1041,9 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
             m.flip_ud();
         }
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x + self.orow;
-            m[(x, y)].col = y + self.ocol;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r + self.orow;
+            m[(r, c)].col = c + self.ocol;
         }
         
         Self::new(self.orow, self.ocol, &m)
@@ -1062,9 +1062,9 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
 
         m.transpose();
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x + self.orow;
-            m[(x, y)].col = y + self.ocol;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r + self.orow;
+            m[(r, c)].col = c + self.ocol;
         }
         
         Self::new(self.orow, self.ocol, &m)
@@ -1098,9 +1098,9 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
             self.cells.rotated_ccw(1)
         };
 
-        for (x, y) in self.cells.keys() {
-            m[(x, y)].row = x + self.orow;
-            m[(x, y)].col = y + self.ocol;
+        for (r, c) in self.cells.keys() {
+            m[(r, c)].row = r + self.orow;
+            m[(r, c)].col = c + self.ocol;
         }
         
         Self::new(self.orow, self.ocol, &m)
@@ -1325,12 +1325,12 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         let sz = self.cells.rows.max(self.cells.columns);
         let mut cells = Matrix::new(sz, sz, Cell::new(0, 0, 0));
 
-        for (i, c) in self.cells.items() {
-            cells[i].colour = c.colour;
+        for (i, cell) in self.cells.items() {
+            cells[i].colour = cell.colour;
         }
-        for (x, y) in cells.keys() {
-            cells[(x,y)].row = self.orow + x;
-            cells[(x,y)].col = self.ocol + y;
+        for (r, c) in cells.keys() {
+            cells[(r,c)].row = self.orow + r;
+            cells[(r,c)].col = self.ocol + c;
         }
 
         Shape::new(self.orow, self.ocol, &cells)
@@ -1464,14 +1464,14 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     */
 
     pub fn has_border_hole(&self, hole: bool, fc: &dyn Fn(usize, usize, usize, usize) -> bool) -> bool {
-        let (x, y) = self.dimensions();
-        if x < 3 || y < 3 {
+        let (r, c) = self.dimensions();
+        if r < 3 || c < 3 {
             return false;
         }
-        for ((x, y), c) in self.cells.items() {
-            let pred = fc(x, y, self.cells.rows, self.cells.columns);
+        for ((r, c), cell) in self.cells.items() {
+            let pred = fc(r, c, self.cells.rows, self.cells.columns);
 
-            if c.colour == Black && pred || hole && c.colour != Black && !pred {
+            if cell.colour == Black && pred || hole && cell.colour != Black && !pred {
                 return false;
             }
         }
@@ -1480,43 +1480,43 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     }
 
     pub fn has_border(&self) -> bool {
-        self.has_border_hole(false, &|x, y, rows, cols| x == 0 || y == 0 || x == rows - 1 || y == cols - 1)
+        self.has_border_hole(false, &|r, c, rows, cols| r == 0 || c == 0 || r == rows - 1 || c == cols - 1)
     }
 
     pub fn has_hole(&self) -> bool {
-        self.has_border_hole(true, &|x, y, rows, cols| x == 0 || y == 0 || x == rows - 1 || y == cols - 1)
+        self.has_border_hole(true, &|r, c, rows, cols| r == 0 || c == 0 || r == rows - 1 || c == cols - 1)
     }
 
     pub fn has_open_border_top(&self) -> bool {
-        self.has_border_hole(true, &|x, y, rows, cols| y == 0 || x == rows - 1 || y == cols - 1)
+        self.has_border_hole(true, &|r, c, rows, cols| c == 0 || r == rows - 1 || c == cols - 1)
     }
 
     pub fn has_open_hole_top(&self) -> bool {
-        self.has_border_hole(false, &|x, y, rows, cols| y == 0 || x == rows - 1 || y == cols - 1)
+        self.has_border_hole(false, &|r, c, rows, cols| c == 0 || r == rows - 1 || c == cols - 1)
     }
 
     pub fn has_open_border_bottom(&self) -> bool {
-        self.has_border_hole(true, &|x, y, _rows, cols| x == 0 || y == 0 || y == cols - 1)
+        self.has_border_hole(true, &|r, c, _rows, cols| r == 0 || c == 0 || c == cols - 1)
     }
 
     pub fn has_open_hole_bottom(&self) -> bool {
-        self.has_border_hole(false, &|x, y, _rows, cols| x == 0 || y == 0 || y == cols - 1)
+        self.has_border_hole(false, &|r, c, _rows, cols| r == 0 || c == 0 || c == cols - 1)
     }
 
     pub fn has_open_border_left(&self) -> bool {
-        self.has_border_hole(true, &|x, y, rows, cols| x == 0 || x == rows - 1 || y == cols - 1)
+        self.has_border_hole(true, &|r, c, rows, cols| r == 0 || r == rows - 1 || c == cols - 1)
     }
 
     pub fn has_open_hole_left(&self) -> bool {
-        self.has_border_hole(false, &|x, y, rows, cols| x == 0 || x == rows - 1 || y == cols - 1)
+        self.has_border_hole(false, &|r, c, rows, cols| r == 0 || r == rows - 1 || c == cols - 1)
     }
 
     pub fn has_open_border_right(&self) -> bool {
-        self.has_border_hole(true, &|x, y, rows, _cols| x == 0 || y == 0 || x == rows - 1)
+        self.has_border_hole(true, &|r, c, rows, _cols| r == 0 || c == 0 || r == rows - 1)
     }
 
     pub fn has_open_hole_right(&self) -> bool {
-        self.has_border_hole(false, &|x, y, rows, _cols| x == 0 || y == 0 || x == rows - 1)
+        self.has_border_hole(false, &|r, c, rows, _cols| r == 0 || c == 0 || r == rows - 1)
     }
 
     pub fn has_border_break(&self) -> (Direction, usize, usize) {
@@ -1546,8 +1546,8 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         let new_other = self.move_in(other);
         let mut shape = self.clone();
 
-        for ((x, y), c) in new_other.cells.items() {
-            shape.cells[(x, y)] = c.clone();
+        for ((r, c), cell) in new_other.cells.items() {
+            shape.cells[(r, c)] = cell.clone();
         }
 
         shape
@@ -1571,8 +1571,8 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
 
     // TODO - remove old other from Shapes?
     pub fn put_all_in(&mut self, other: &Self) {
-        for ((x, y), c) in other.cells.items() {
-            self.cells[(x, y)] = c.clone();
+        for ((r, c), cell) in other.cells.items() {
+            self.cells[(r, c)] = cell.clone();
         }
     }
 
@@ -1595,25 +1595,23 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     }
 
     pub fn move_in(&self, other: &Self) -> Self {
-        let (x, y) = self.centre_of();
-        let (ox, oy) = other.centre_of();
-        let dx = (x - ox) as isize;
-        let dy = (y - oy) as isize;
+        let (r, c) = self.centre_of();
+        let (or, oc) = other.centre_of();
+        let dr = (r - or) as isize;
+        let dc = (c - oc) as isize;
 
-        other.translate(dx, dy)
+        other.translate(dr, dc)
     }
 
     fn container(&self, other: &Self) -> bool {
-//println!("{} <= {} && {} <= {} && {} > {} && {} > {}",
-//        self.ox, other.ox, self.oy, other.oy, self.cells.rows + self.ox, other.cells.rows + other.ox, self.cells.columns + self.oy, other.cells.columns + other.oy);
         self.orow <= other.orow && self.ocol <= other.ocol && self.cells.rows + self.orow >= other.cells.rows + other.orow && self.cells.columns + self.ocol >= other.cells.columns + other.ocol
     }
 
     pub fn can_contain(&self, other: &Self) -> bool {
         let (s, o) = if self.size() > other.size() { (self, other) } else { (other, self) };
         if s.width() < 3 || s.height() < 3 || s.width() < o.width() + 2 || s.height() < o.height() + 2 { return false };
-        for (x, y) in other.cells.keys() {
-            if x != 0 && y != 0 && x < s.cells.rows && x < s.cells.columns && s.cells[(x, y)].colour != Black {
+        for (r, c) in other.cells.keys() {
+            if r != 0 && c != 0 && r < s.cells.rows && r < s.cells.columns && s.cells[(r, c)].colour != Black {
                 return false;
             }
         }
@@ -1628,8 +1626,8 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     pub fn is_contained(&self, other: &Self) -> bool {
         let (s, o) = if self.size() > other.size() { (self, other) } else { (other, self) };
         if s.width() < 3 || s.height() < 3 || s.width() < o.width() + 2 || s.height() < o.height() + 2 { return false };
-        for (x, y) in o.cells.keys() {
-            if x != 0 && y != 0 && x < s.cells.rows && x < s.cells.columns && s.cells[(x, y)].colour != o.cells[(x - 1, y - 1)].colour {
+        for (r, c) in o.cells.keys() {
+            if r != 0 && c != 0 && r < s.cells.rows && r < s.cells.columns && s.cells[(r, c)].colour != o.cells[(r - 1, c - 1)].colour {
                 return false;
             }
         }
@@ -1674,11 +1672,11 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         true
     }
 
-    pub fn translate_x(&self, r: isize) -> Self {
+    pub fn translate_row(&self, r: isize) -> Self {
         Self::translate(self, r, 0)
     }
 
-    pub fn translate_y(&self, c: isize) -> Self {
+    pub fn translate_col(&self, c: isize) -> Self {
         Self::translate(self, 0, c)
     }
 
@@ -1715,7 +1713,6 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
 
         shape.orow = r;
         shape.ocol = c;
-//println!("{} {}", x, y);
 
         shape.cells.iter_mut()
             .for_each(|cell| {
@@ -2002,8 +1999,6 @@ println!("{rows}/{cols} {}/{} {x}/{y} {}/{}", self.cells.rows, self.cells.column
 
         i.orow -= or;
         i.ocol -= oc;
-        //i.ox = 0;
-        //i.oy = 0;
 
         for c in i.cells.values_mut() {
             c.row -= or;
@@ -2092,15 +2087,15 @@ println!("{rows}/{cols} {}/{} {x}/{y} {}/{}", self.cells.rows, self.cells.column
 
     pub fn position(&self, ci: &Self) -> Self {
         let mut i = self.clone();
-        let ox = if ci.orow == 0 { ci.orow } else { ci.orow - 1 };
-        let oy = if ci.ocol == 0 { ci.ocol } else { ci.ocol - 1 };
+        let or = if ci.orow == 0 { ci.orow } else { ci.orow - 1 };
+        let oc = if ci.ocol == 0 { ci.ocol } else { ci.ocol - 1 };
 
-        i.orow = ox;
-        i.ocol = oy;
+        i.orow = or;
+        i.ocol = oc;
 
         for c in i.cells.values_mut() {
-            c.row += ox;
-            c.col += oy;
+            c.row += or;
+            c.col += oc;
         }
 
         i
@@ -2320,7 +2315,7 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
         self.clone()
     }
 
-    // bool is true == X axis, false = Y axis
+    // bool is true == Row axis, false = Col axis
     pub fn striped_x(&self) -> Colour {
         NoColour
     }
@@ -2395,8 +2390,8 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
 
             let reachable = self.cells.bfs_reachable((r, c), true, |i| self.cells[i].colour != self.colour);
 
-            for (x,y) in &reachable {
-                if *x == 0 || *y == 0 || *x == self.cells.rows - 1 || *y == self.cells.columns - 1 {
+            for (r,c) in &reachable {
+                if *r == 0 || *c == 0 || *r == self.cells.rows - 1 || *c == self.cells.columns - 1 {
                     continue 'outer;
                 }
             }
@@ -2674,8 +2669,6 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
             }
         }
 
-//println!("{:?}", shape.translate_absolute(self.ox, self.oy));
-        //shape.translate_absolute(self.ox, self.oy)
         shape
     }
 
@@ -2835,7 +2828,6 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
                         CellCategory::EdgeB
                     }
                 } else if c == 0 {
-//println!("{x}/{y}: {:?} {:?}", cells[(x-1,y)].colour, cells[(x+1,y)].colour);
                     if (r == 0 || cells[(r-1,c)].colour == bg) && (r == cells.rows - 1 || cells[(r+1,c)].colour == bg) {
                         CellCategory::PointL
                     } else if r > 0 && cells[(r-1,c)].colour == bg {
@@ -2846,7 +2838,6 @@ println!("{sx} -> {ex}, {sy} -> {ey}");
                         CellCategory::EdgeL
                     }
                 } else if c == cells.columns - 1 {
-//println!("{x}/{y}: {:?} {:?}", cells[(x-1,y)].colour, cells[(x+1,y)].colour);
                     if (r == 0 || cells[(r-1,c)].colour == bg) && (r == cells.rows - 1 || cells[(r+1,c)].colour == bg) {
                         CellCategory::PointR
                     } else if r > 0 && cells[(r-1,c)].colour == bg {
@@ -3456,51 +3447,50 @@ impl Shapes {
     }
 
     pub fn corners(&self) -> (usize, usize, usize, usize) {
-        let mut min_x = usize::MAX;
-        let mut min_y = usize::MAX;
-        let mut max_x = 0;
-        let mut max_y = 0;
+        let mut min_r = usize::MAX;
+        let mut min_c = usize::MAX;
+        let mut max_r = 0;
+        let mut max_c = 0;
 
         for s in self.shapes.iter() {
-            if min_x > s.orow {
-                min_x = s.orow;
+            if min_r > s.orow {
+                min_r = s.orow;
             }
-            if min_y > s.ocol {
-                min_y = s.ocol;
+            if min_c > s.ocol {
+                min_c = s.ocol;
             }
-            if max_x < s.orow + s.cells.rows {
-                max_x = s.orow + s.cells.rows;
+            if max_r < s.orow + s.cells.rows {
+                max_r = s.orow + s.cells.rows;
             }
-            if max_y < s.ocol + s.cells.columns {
-                max_y = s.ocol + s.cells.columns;
+            if max_c < s.ocol + s.cells.columns {
+                max_c = s.ocol + s.cells.columns;
             }
         }
 
-        if min_x == usize::MAX {
-            min_x = 0;
+        if min_r == usize::MAX {
+            min_r = 0;
         }
-        if min_y == usize::MAX {
-            min_y = 0;
+        if min_c == usize::MAX {
+            min_c = 0;
         }
 
-        (min_x, min_y, max_x, max_y)
+        (min_r, min_c, max_r, max_c)
     }
 
     pub fn to_shape(&self) -> Shape {
-        let (min_x, min_y, max_x, max_y) = self.corners();
+        let (min_r, min_c, max_r, max_c) = self.corners();
 
-        let mut shape = Shape::new_sized_coloured_position(min_x, min_y, max_x - min_x, max_y - min_y, Black);
+        let mut shape = Shape::new_sized_coloured_position(min_r, min_c, max_r - min_r, max_c - min_c, Black);
 
         shape.colour = Mixed;
-        shape.orow = min_x;
-        shape.ocol = min_y;
+        shape.orow = min_r;
+        shape.ocol = min_c;
 
         for s in self.shapes.iter() {
             for c in s.cells.values() {
-                //shape.cells[(x - min_x, y - min_y)] = c.clone();
-                shape.cells[(c.row - min_x, c.col - min_y)].row = c.row;
-                shape.cells[(c.row - min_x, c.col - min_y)].col = c.col;
-                shape.cells[(c.row - min_x, c.col - min_y)].colour = c.colour;
+                shape.cells[(c.row - min_r, c.col - min_c)].row = c.row;
+                shape.cells[(c.row - min_r, c.col - min_c)].col = c.col;
+                shape.cells[(c.row - min_r, c.col - min_c)].colour = c.colour;
             }
         }
 
@@ -4067,10 +4057,10 @@ println!("{m:?}");
 
         for s in nps.shapes.iter_mut() {
             let p = s.nearest(positions);
-            let xoffset = if p.orow >= s.orow { offset } else { offset - 1 };
-            let yoffset = if p.ocol >= s.ocol { offset } else { offset - 1 };
+            let roffset = if p.orow >= s.orow { offset } else { offset - 1 };
+            let coffset = if p.ocol >= s.ocol { offset } else { offset - 1 };
 
-            *s = s.translate_absolute(p.orow + xoffset, p.ocol + yoffset);
+            *s = s.translate_absolute(p.orow + roffset, p.ocol + coffset);
         }
         for s in positions.shapes.iter() {
             nps.shapes.push(s.clone());
@@ -4534,27 +4524,15 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
     }
     */
 
-    // bool is true == X axis, false = Y axis
-    pub fn striped_x(&self) -> Colour {
+    // bool is true == Row axis, false = Column axis
+    pub fn striped_r(&self) -> Colour {
         NoColour
     }
 
-    pub fn striped_y(&self) -> Colour {
+    pub fn striped_c(&self) -> Colour {
         NoColour
     }
 
-    /*
-    pub fn stretch_x(&self, cells: Vec<Cell>) -> Self {
-        self.clone()
-    }
-
-    pub fn stretch_y(&self, cells: Vec<Cell>) -> Self {
-        self.clone()
-    }
-    */
-
-    /*
-    */
     pub fn shrink(&self) -> Self {
          let mut shapes: Vec<Shape> = Vec::new();
 
@@ -4566,7 +4544,6 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
     }
 
     pub fn fill_missing(&self, to: Colour) -> Self {
-//println!("{:?}", self);
         let mut shapes = Shapes::new_sized(self.nrows, self.ncols);
 
         for shape in self.shapes.iter() {
@@ -4705,7 +4682,6 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
         'outer:
         for shape1 in shapes1.iter_mut() {
             for shape2 in shapes2.iter() {
-                //if shape1.ox == shape2.oy { // ???
                 if shape1.orow == shape2.orow && shape1.ocol == shape2.ocol { // ???
 //shape1.show();
 //shape2.show();
@@ -4799,10 +4775,10 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
                         shape1.io_edges.insert(ShapeEdgeCategory::Symmetric);
                     } else {
                         if mirrored_r {
-                            shape1.io_edges.insert(ShapeEdgeCategory::MirroredX);
+                            shape1.io_edges.insert(ShapeEdgeCategory::MirroredRow);
                         }
                         if mirrored_c {
-                            shape1.io_edges.insert(ShapeEdgeCategory::MirroredY);
+                            shape1.io_edges.insert(ShapeEdgeCategory::MirroredCol);
                         }
                         if shape1.is_rotated_90(shape2) {
                             shape1.io_edges.insert(ShapeEdgeCategory::Rot90);

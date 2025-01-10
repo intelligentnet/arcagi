@@ -90,7 +90,7 @@ pub fn experiment_grid(ex: &Examples, file: &str, experiment: usize, _trans: Tra
                 */
                 if ans.equals(target) != Colour::Same {
                     if n == usize::MAX {
-                        if attempts > 0 {
+                        if attempts > 0 && (experiment < 1000 || attempts > 1) {
                             println!("{file} {experiment:<4}: {attempts} worked out of {}", ex.examples.len());
                         }
                         return ex.tests.iter().map(|_| Grid::trivial()).collect::<Vec<_>>();
@@ -122,7 +122,7 @@ pub fn experiment_grid(ex: &Examples, file: &str, experiment: usize, _trans: Tra
 
 pub fn experiment_example(ex: &Examples, file: &str, experiment: usize, _trans: Transformation, func: &(dyn Fn(&Example) -> Grid + RefUnwindSafe)) -> Vec<Grid> {
     for (attempts, e) in ex.examples.iter().enumerate() {
-        //if attempts < 2 { continue; }
+        //if attempts < 4 { continue; }
         let target = &e.output.grid;
         let ans = func(e);
 
@@ -136,7 +136,7 @@ pub fn experiment_example(ex: &Examples, file: &str, experiment: usize, _trans: 
 //ans.show();
 
         if ans == Grid::trivial() || ans.equals(target) != Colour::Same {
-            if attempts > 0 {
+            if attempts > 0 && (experiment < 1000 || attempts > 1) {
                 println!("{file} {experiment:<4}: {attempts} worked out of {}", ex.examples.len());
             }
             return ex.tests.iter().map(|_| Grid::trivial()).collect::<Vec<_>>();

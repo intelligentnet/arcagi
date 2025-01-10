@@ -31,25 +31,26 @@ pub fn runner(data: &str, task_name: &str, experiment: &str, trans: &str, all: b
     let mut output: BTreeMap<String, Vec<OutputData>> = BTreeMap::new();
     let mut cap_cats: BTreeMap<GridCategory, i32> = BTreeMap::new();
     let mut cap_todo: BTreeMap<GridCategory, i32> = BTreeMap::new();
+    let mut rule_tasks: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     let mut done: BTreeSet<String> = BTreeSet::new();
     let mut tries: usize = 0;
 
     // Main processing outer loop
-    for (file_name, task) in tdata.iter() {
-        let file = file_name.to_string();
+    for (file_name, data) in tdata.iter() {
+        let task = file_name.to_string();
 
         // already done or just one???
-        if done.contains(&file) || (!task_name.is_empty() && task_name != "all" && file != task_name) {
+        if done.contains(&task) || (!task_name.is_empty() && task_name != "all" && task != task_name) {
             continue;
         }
 
-        let mut examples = Examples::new(task);
+        let mut examples = Examples::new(data);
 
         // Do some shapes overay others?
         if examples.cat.contains(&OverlayInSame) || examples.cat.contains(&OverlayOutSame) {
-            examples = Examples::new_cons(task);
+            examples = Examples::new_cons(data);
         }
-        println!("{file}: {:?}", examples.cat);
+        println!("{task}: {:?}", examples.cat);
 
         let transform = if trans == "all" || trans == "NoTrans" {
             NoTrans
@@ -62,18 +63,26 @@ pub fn runner(data: &str, task_name: &str, experiment: &str, trans: &str, all: b
         };
 
         // Base pass with no transformations
-        pass(all, &file, experiment, &examples, transform, is_test, &mut output, &mut cap_cats, &mut cap_todo, &mut done, &mut tries);
+        let rule = pass(all, &task, experiment, &examples, transform, is_test, &mut output, &mut cap_cats, &mut cap_todo, &mut done, &mut tries);
+
+        if done.contains(&task) {
+            if let Some(rule) = rule {
+                if rule != usize::MAX {
+                    rule_tasks.entry(rule).or_default().push(task.clone());
+                }
+            }
+        }
 
         // Experimental - needs more work!
         if trans == "all" {
             // Now check for transformed grids to make closures more generic
             for transform in Transformation::iter() {
-                if transform == NoTrans || transform >= MirrorXRotate90 { continue; }
+                if transform == NoTrans || transform >= MirrorRowRotate90 { continue; }
                 //println!("{:?}", transform);
 
                 let ex_copy = examples.transformation(transform);
 
-                pass(all, &file, experiment, &ex_copy, transform, is_test, &mut output, &mut cap_cats, &mut cap_todo, &mut done, &mut tries);
+                let _rule = pass(all, &task, experiment, &ex_copy, transform, is_test, &mut output, &mut cap_cats, &mut cap_todo, &mut done, &mut tries);
             }
         }
 
@@ -98,7 +107,11 @@ pub fn runner(data: &str, task_name: &str, experiment: &str, trans: &str, all: b
     }
 
     println!("Complete: {cap_done:?}");
-    println!("{done:?}");
+    //println!("{done:?}");
+    if rule_tasks.len() > 0 {
+        format(&rule_tasks);
+        println!("Generalisation Ratio: {:.4}", done.len() as f64 / rule_tasks.len() as f64);
+    }
     println!("Done = {}, To Do = {}, tries = {tries}", done.len(), cnt - done.len());
 
     let timing = start.elapsed().as_secs() as f64 + start.elapsed().subsec_millis() as f64 / 1000.0;
@@ -107,14 +120,31 @@ pub fn runner(data: &str, task_name: &str, experiment: &str, trans: &str, all: b
     println!("Used memory : {:.2} Mb", PEAK.current_usage_as_mb());
 }
 
-#[allow(clippy::too_many_arguments)]
-fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Transformation, is_test: bool, output: &mut BTreeMap<String, Vec<OutputData>>, cap_cats: &mut BTreeMap<GridCategory, i32>, cap_todo: &mut BTreeMap<GridCategory, i32>, done: &mut BTreeSet<String>, tries: &mut usize) {
+fn pass(all: bool, task: &str, experiment: &str, examples: &Examples, trans: Transformation, is_test: bool, output: &mut BTreeMap<String, Vec<OutputData>>, cap_cats: &mut BTreeMap<GridCategory, i32>, cap_todo: &mut BTreeMap<GridCategory, i32>, done: &mut BTreeSet<String>, tries: &mut usize) -> Option<usize> {
     let cat = &examples.cat;
     let targets: Vec<Grid> = examples.tests.iter().map(|test| test.output.grid.clone()).collect();
 
     // used by many tasks
     let colour_diffs = examples.io_colour_diff();
     let colour_common = examples.io_colour_common();
+
+{
+        //let (in_rs, in_cs) = examples.examples[0].input.grid.dimensions();
+        //let (out_rs, out_cs) = examples.examples[0].output.grid.dimensions();
+        //let rs = out_rs / in_rs;
+        //let cs = out_cs / in_cs;
+        
+        // testing function
+        let func = |ex: &Example| {
+            if !cat.contains(&InLessThanOut) || colour_diffs.len() != 1 {
+                return Grid::trivial();
+            }
+
+            ex.input.grid.scale_up(ex.input.grid.height())
+        };
+
+        //if let Some(rule) = run_experiment(file, 10000, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+}
 
     let gc = BlankIn;
     if all || cat.contains(&gc) { // 2 done
@@ -144,7 +174,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 0, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 0, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -185,10 +215,10 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                             if sc == fc && (fw[0].row != w[0].row || fw[0].col != w[0].col) {
                                 let patch = grid.get_patch(w[0].row, w[0].col, m.rows, m.columns);
                                 if patch.is_full() && s.same_patch(&patch) {
-                                    let sox = if s.orow > 0 { s.orow - 1 } else { s.orow };
-                                    let soy = if s.ocol > 0 { s.ocol - 1 } else { s.ocol };
+                                    let sor = if s.orow > 0 { s.orow - 1 } else { s.orow };
+                                    let soc = if s.ocol > 0 { s.ocol - 1 } else { s.ocol };
 
-                                    grid.fill_patch_mut(&patch, sox, soy);
+                                    grid.fill_patch_mut(&patch, sor, soc);
 
                                     continue 'second;
                                 }
@@ -212,7 +242,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 1, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 1, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = &|ex: &Example| {
             if ex.input.black.is_empty() {
@@ -264,10 +294,10 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                         if xo == usize::MAX && yo == usize::MAX || pr == xo && pc == yo {
                             return Grid::trivial();
                         }
-                        for x in 0 .. p.cells.rows {
-                            for y in 0 .. p.cells.columns {
-                                if grid.cells[(p.orow+x,p.ocol+y)].colour == Black && xo+x < grid.cells.rows && yo+1+y < grid.cells.columns {
-                                    grid.cells[(p.orow+x,p.ocol+y)] = grid.cells[(xo+x,yo+1+y)].clone();
+                        for r in 0 .. p.cells.rows {
+                            for c in 0 .. p.cells.columns {
+                                if grid.cells[(p.orow+r,p.ocol+c)].colour == Black && xo+r < grid.cells.rows && yo+1+c < grid.cells.columns {
+                                    grid.cells[(p.orow+r,p.ocol+c)] = grid.cells[(xo+r,yo+1+c)].clone();
                                 }
                             }
                         }
@@ -280,10 +310,10 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                         if xo == usize::MAX && yo == usize::MAX || pr == xo && pc == yo {
                             return Grid::trivial();
                         }
-                        for x in 0 .. p.cells.rows {
-                            for y in 0 .. p.cells.columns {
-                                if grid.cells[(p.orow+x,p.ocol+y)].colour == Black && xo+1+x < grid.cells.rows && yo+y < grid.cells.columns {
-                                    grid.cells[(p.orow+x,p.ocol+y)] = grid.cells[(xo+1+x,yo+y)].clone();
+                        for r in 0 .. p.cells.rows {
+                            for c in 0 .. p.cells.columns {
+                                if grid.cells[(p.orow+r,p.ocol+c)].colour == Black && xo+1+r < grid.cells.rows && yo+c < grid.cells.columns {
+                                    grid.cells[(p.orow+r,p.ocol+c)] = grid.cells[(xo+1+r,yo+c)].clone();
                                 }
                             }
                         }
@@ -301,7 +331,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 4, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 4, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         if !examples.examples[0].input.black.is_empty() && !examples.examples[0].output.shapes.shapes.is_empty() {
             let mut ccm = examples.examples[0].output.grid.as_shape().cell_colour_cnt_map();
@@ -337,7 +367,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                 grid
             };
 
-            if run_experiment(file, 3, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 3, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         let func = |ex: &Example| {
@@ -363,7 +393,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
 
         let (rs, cs) = examples.examples[0].output.grid.dimensions();
 
-        if run_experiment(file, 4, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 4, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !ex.cat.contains(&NxNIn(15)) || !ex.cat.contains(&NxNOut(3)) || !colour_diffs.is_empty() {
@@ -380,7 +410,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 5, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 5, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -444,7 +474,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 6, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 6, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // TODO BlackPatches okay but cannot find test!!!
         let func = |ex: &Example| {
@@ -473,7 +503,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 6, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 6, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         if colour_diffs.len() == 2 {
             for i in 0 .. 2 {
@@ -519,7 +549,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                     shapes.trim_to_grid()
                 };
 
-                if run_experiment(file, 7, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 7, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
         }
 
@@ -555,7 +585,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 8, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 8, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -607,7 +637,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 9, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 9, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -640,7 +670,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 10, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 10, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -648,7 +678,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
     if all || cat.contains(&gc) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment(file, 11, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.grid.in_to_squared_out(), output) { return; };
+        if let Some(rule) = run_experiment(task, 11, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.grid.in_to_squared_out(), output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -656,16 +686,16 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
     if all || cat.contains(&gc) && !cat.contains(&BGGridOutBlack) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment(file, 15, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_min().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 15, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_min().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 20, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_max_colour_count().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 20, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_max_colour_count().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 30, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.has_mirror_r().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 30, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.has_mirror_r().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 40, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.has_mirror_c().to_grid(), output) { return; };
-        //if run_experiment_examples(&file, 1000, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return; };
+        if let Some(rule) = run_experiment(task, 40, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.has_mirror_c().to_grid(), output) { return Some(rule); };
+        //if let Some(rule) = run_experiment_examples(&file, 1000, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return Some(rule); };
 
-        //-if run_experiment_examples(&file, 1010, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1010, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -674,7 +704,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
     if all || cat.contains(&gc) { // 3?
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment_tries(file, 800, experiment, trans, is_test, examples, &targets, done, tries, &|ex, _, n| mirror_only(ex, n), output) { return; };
+        if let Some(rule) = run_experiment_tries(task, 800, experiment, trans, is_test, examples, &targets, done, tries, &|ex, _, n| mirror_only(ex, n), output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -693,7 +723,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             Grid::new(ex.input.shapes.len() / xc, xc, ex.input.shapes.shapes[0].colour)
         };
 
-        if run_experiment(file, 31, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 31, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -732,7 +762,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 41, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 41, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let common_colour = examples.io_common_row_colour();
 
@@ -760,7 +790,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 42, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 42, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -790,7 +820,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 43, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 43, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         if colour_diffs.len() == 2 {
             let first = &examples.examples[0].input.grid.to_shapes_sq().shapes[0];
@@ -836,7 +866,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                 Shapes::new_shapes(&[s1.clone(), s2.clone()]).to_grid()
             };
 
-            if run_experiment(file, 44, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 44, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -878,7 +908,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 50, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 50, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         let func = &|ex: &Example| {
@@ -909,7 +939,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 60, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 60, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |gi: &Example| {
 //gi.input.shapes.show();
@@ -922,14 +952,11 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                     colour = s.colour;
                 }
                 if colour != s.colour {
-                    //xx = s.cells[(0,0)].x;
-                    //yy = s.cells[(0,0)].y;
                     rc.push((s.cells[(0,0)].row, s.cells[(0,0)].col, s.colour));
 
                     break;
                 }
             }
-//println!("{xx}/{yy} {:?}", colour);
 
             for ss in shapes.shapes.iter_mut() {
                 for (rr, cc, colour) in rc.iter() {
@@ -947,7 +974,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 70, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 70, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -955,21 +982,21 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
     if all || cat.contains(&gc) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment(file, 80, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_sub_max().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 80, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_sub_max().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 90, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.largest().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 90, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.largest().to_grid(), output) { return Some(rule); };
 //target.show();
 //ans.show();
 
-        if run_experiment(file, 100, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_sub_min().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 100, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_sub_min().to_grid(), output) { return Some(rule); };
 
         let common_colours = examples.find_output_colours();
 
         for colour in common_colours {
-            if run_experiment(file, 110, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.cell_colour_cnts(colour).to_grid(), output) { return; };
+            if let Some(rule) = run_experiment(task, 110, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.cell_colour_cnts(colour).to_grid(), output) { return Some(rule); };
         }
 
-        if run_experiment(file, 120, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_sub_largest_count().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 120, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_sub_largest_count().to_grid(), output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let mut cnt = 0;
@@ -990,15 +1017,15 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             }
 
             let mut grid = Grid::new(height, 3, Black);
-            let mut x = 0;
+            let mut r = 0;
 
-            // Get right ordering by munging x coord then sorting
+            // Get right ordering by munging row coord then sorting
             for (i, s) in shapes.iter_mut().enumerate() {
                 if i > 0 && (i % 3) == 0 {
-                    x += 1;
+                    r += 1;
                 }
 
-                s.orow = x;
+                s.orow = r;
             }
 
             shapes.sort_by(|a, b| (a.orow, a.ocol).cmp(&(b.orow, b.ocol)));
@@ -1024,7 +1051,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 121, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 121, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !ex.input.grid.is_square() {
@@ -1057,7 +1084,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 122, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 122, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let ex = &examples.examples[0];
         let in_colour = ex.output.grid.get_diff_colour(&ex.input.grid);
@@ -1067,7 +1094,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             ex.input.grid.recolour(in_colour, out_colour)
         };
 
-        if run_experiment(file, 123, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 123, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let mut colours = ex.input.shapes.find_shape_colours();
@@ -1116,7 +1143,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             grid
         };
 
-        if run_experiment(file, 124, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 124, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let (rs, cs) = examples.examples[0].output.grid.dimensions();
 
@@ -1157,12 +1184,12 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             Grid::new(rs, cs, colour)
         };
 
-        if run_experiment(file, 125, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 125, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
-    let gc = MirrorYIn;
-    if all || cat.contains(&gc) || cat.contains(&MirrorYOut) {
+    let gc = MirrorCIn;
+    if all || cat.contains(&gc) || cat.contains(&MirrorCOut) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
         let func = |ex: &Example| {
@@ -1181,7 +1208,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 125, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 125, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // Also done by 142
         let func = |ex: &Example| {
@@ -1203,12 +1230,12 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             new_shapes.to_grid()
         };
 
-        if run_experiment(file, 126, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 126, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
-    let gc = MirrorXOut;
-    if all || cat.contains(&gc) || cat.contains(&MirrorYOut) {
+    let gc = MirrorROut;
+    if all || cat.contains(&gc) || cat.contains(&MirrorCOut) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
         let func = |gi: &Example| {
@@ -1231,7 +1258,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 280, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 280, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let bg = ex.input.grid.max_colour();
@@ -1241,7 +1268,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
             shapes.to_grid()
         };
 
-        if run_experiment(file, 281, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 281, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -1249,10 +1276,9 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
     if all || cat.contains(&gc) && !cat.contains(&Div9Out) { 
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        //-if run_experiment_examples(&file, 1020, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_9_in_out(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1020, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_9_in_out(&exs), output) { return Some(rule); };
         //
         let out_colours = examples.find_all_output_colours();
-
         let (rs, cs) = examples.examples[0].output.grid.dimensions();
 
         if out_colours.len() == 2 && examples.examples[0].input.grid.is_3x3() {
@@ -1264,7 +1290,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                }
             };
 
-            if run_experiment(file, 285, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 285, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         *cap_todo.entry(gc).or_insert(0) += 1;
@@ -1279,11 +1305,11 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
     if all || cat.contains(&gc) && cat.contains(&Is3x3Out) && !cat.contains(&Div9Out) { 
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        //-if run_experiment_examples(&file, 1030, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1030, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return Some(rule); };
 
-        //-if run_experiment_examples(&file, 1040, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_double(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1040, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_double(&exs), output) { return Some(rule); };
 
-        //-if run_experiment_examples(&file, 1050, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_expand_3x3(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1050, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_expand_3x3(&exs), output) { return Some(rule); };
 
         if examples.examples[0].input.grid.size() * 9 == examples.examples[0].output.grid.size() {
             for n in 0 .. 2 {
@@ -1324,7 +1350,7 @@ fn pass(all: bool, file: &str, experiment: &str, examples: &Examples, trans: Tra
                     shapes.to_grid()
                 };
 
-                if run_experiment(file, 130, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 130, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
         }
 
@@ -1383,7 +1409,7 @@ println!("139 --- {file}");
         */
 
         // Not working???
-        //if run_experiment(file, 139, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        //if let Some(rule) = run_experiment(file, 139, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let grid = &ex.input.grid;
@@ -1423,7 +1449,7 @@ println!("139 --- {file}");
             new_grid
         };
 
-        if run_experiment(file, 141, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 141, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // Also done by 126
         let func = |ex: &Example| {
@@ -1438,7 +1464,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 142, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 142, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let out_colours = examples.find_output_colours();
 
@@ -1469,7 +1495,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 145, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 145, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if colour_diffs.len() != 1 {
@@ -1488,7 +1514,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 146, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 146, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if colour_diffs.len() != 1 {
@@ -1512,7 +1538,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 147, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 147, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let ex = &examples.examples[0];
         let smallest = ex.input.shapes.smallest();
@@ -1562,7 +1588,7 @@ println!("139 --- {file}");
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 148, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 148, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         let func = |ex: &Example| {
@@ -1665,7 +1691,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 149, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 149, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -1674,7 +1700,7 @@ println!("139 --- {file}");
         *cap_cats.entry(gc).or_insert(0) += 1;
 
 //println!("#### {file}");
-        //-if run_experiment_examples(&file, 1060, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1060, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return Some(rule); };
 
         let func = |gi: &Example| {
             let mut big: Shape = Shape::trivial();
@@ -1746,7 +1772,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 140, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 140, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -1755,7 +1781,7 @@ println!("139 --- {file}");
         *cap_cats.entry(gc).or_insert(0) += 1;
 
         if all || cat.contains(&InSameCountOut) || cat.contains(&InSameCountOutColoured) {
-            //if run_experiment_examples(&file, 1070, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_substitute(&exs), output) { return; };
+            //if let Some(rule) = run_experiment_examples(&file, 1070, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_substitute(&exs), output) { return Some(rule); };
 
             let func = |ex: &Example| {
                 let biggest = ex.input.coloured_shapes.biggest_shape();
@@ -1780,7 +1806,7 @@ println!("139 --- {file}");
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 141, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 141, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             let func = |ex: &Example| {
                 if ex.input.shapes.shapes.len() > 20 {
@@ -1801,7 +1827,7 @@ println!("139 --- {file}");
             };
 
             // evaluation only
-            if run_experiment(file, 142, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 142, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         if all || cat.contains(&InLessCountOut) {
@@ -1811,8 +1837,8 @@ println!("139 --- {file}");
         }
 
         // 0ca9ddb6 4258a5f9 913fb3ed 95990924 b60334d2 test
-        if run_experiment_tries(file, 0, experiment, trans, is_test, examples, &targets, done, tries, &|ex, _, n| transform_only(ex, n), output) { return; };
-        //-if run_experiment_examples(&file, 1100, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return; };
+        if let Some(rule) = run_experiment_tries(task, 0, experiment, trans, is_test, examples, &targets, done, tries, &|ex, _, n| transform_only(ex, n), output) { return Some(rule); };
+        //-if let Some(rule) = run_experiment_examples(&file, 1100, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let mut grid = ex.input.grid.clone();
@@ -1827,7 +1853,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 220, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 220, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = &|ex: &Example| {
             fn do_diag(grid: &mut Grid, s: &Shape) {
@@ -1862,7 +1888,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 163, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 163, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if colour_diffs.len() != 1 {
@@ -1886,7 +1912,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 165, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 165, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -1925,7 +1951,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 166, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 166, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -1933,9 +1959,9 @@ println!("139 --- {file}");
     if all || cat.contains(&gc) { // 27
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        //if run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return; };
+        //if let Some(rule) = run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return Some(rule); };
 
-        //-if run_experiment_examples(&file, 1050, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_expand_3x3(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1050, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_expand_3x3(&exs), output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !ex.input.grid.is_square() {
@@ -1961,7 +1987,7 @@ println!("139 --- {file}");
 
             shapes.to_grid()
         };
-        if run_experiment(file, 160, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 160, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // TODO: Combine 160 and 162
         let func = |ex: &Example| {
@@ -1988,7 +2014,7 @@ println!("139 --- {file}");
 
             shapes.to_grid()
         };
-        if run_experiment(file, 162, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 162, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = &|ex: &Example| {
             if ex.input.coloured_shapes.shapes.len() != 1 || !ex.input.coloured_shapes.shapes[0].is_square() || ex.input.coloured_shapes.shapes[0].size() != 36 {
@@ -2001,7 +2027,7 @@ println!("139 --- {file}");
             ss.to_grid()
         };
 
-        if run_experiment(file, 163, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 163, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
 //a.show();
@@ -2011,17 +2037,17 @@ println!("139 --- {file}");
         *cap_cats.entry(gc).or_insert(0) += 1;
 
         /* Causes problems probably not
-        //if run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return; };
+        //if let Some(rule) = run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return Some(rule); };
 
-        //if run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return; };
+        //if let Some(rule) = run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return Some(rule); };
 
         // 5
         if all || cat.contains(&InSameCountOut) {
-            //if run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_move_together(&exs), output) { return; };
+            //if let Some(rule) = run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_move_together(&exs), output) { return Some(rule); };
         }
         */
 
-        if cat.contains(&IsPanelledXOut) {
+        if cat.contains(&IsPanelledROut) {
             let func = |ex: &Example| {
                 let grid_shape = ex.input.grid.as_shape();
                 let colour = grid_shape.majority_colour();
@@ -2050,10 +2076,10 @@ println!("139 --- {file}");
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 500, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 500, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
-        //if run_experiment(file, 150, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.toddle_colours().to_grid(), output) { return; };
+        //if let Some(rule) = run_experiment(file, 150, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.toddle_colours().to_grid(), output) { return Some(rule); };
 
         // Clunky and not very generic 42918530 in eval
         let func = |gi: &Example| {
@@ -2119,7 +2145,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 161, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 161, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         if !cat.contains(&FullyPopulatedIn) {
             let func = |gi: &Example| {
@@ -2161,7 +2187,7 @@ println!("139 --- {file}");
                 si.input.shapes.to_grid()
             };
 
-            if run_experiment(file, 170, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 170, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         let func = |gi: &Example| {
@@ -2211,7 +2237,7 @@ println!("139 --- {file}");
             si.to_grid()
         };
 
-        if run_experiment(file, 180, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 180, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = &|ex: &Example| {
             let mut grid = ex.input.grid.clone();
@@ -2235,7 +2261,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 51, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 51, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !ex.cat.contains(&NoShapesIn(5)) || !ex.cat.contains(&NoShapesOut(6)) || colour_diffs.is_empty() {
@@ -2277,7 +2303,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 182, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 182, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -2317,7 +2343,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 183, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 183, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -2365,7 +2391,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 184, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 184, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -2373,7 +2399,7 @@ println!("139 --- {file}");
     if all || cat.contains(&gc) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        //-if run_experiment_examples(&file, 1110, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_double(&exs), output) { return; };
+        //-if let Some(rule) = run_experiment_examples(&file, 1110, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_double(&exs), output) { return Some(rule); };
 
         let func = |gi: &Example| {
             /*
@@ -2396,7 +2422,7 @@ println!("139 --- {file}");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 190, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 190, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         /*
         // TODO Important 10fcaaa3
@@ -2435,7 +2461,7 @@ println!("139 --- {file}");
             copy.trim_to_grid()
         };
 
-        if run_experiment(file, 191, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(file, 191, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         */
 
     let colours = examples.io_colour_diff();
@@ -2459,7 +2485,7 @@ println!("139 --- {file}");
         shapes.to_grid_transparent()
     };
 
-    if run_experiment(file, 192, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 192, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -2477,7 +2503,7 @@ println!("139 --- {file}");
             ex.input.grid.as_shape().checker(rs, cs, &|r,_| r == ex.input.grid.cells.rows, &|s| s.mirrored_c(), false).to_grid()
         };
 
-        if run_experiment(file, 600, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 600, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             // TODO: Derive the predicate and function before hand
@@ -2486,7 +2512,7 @@ println!("139 --- {file}");
             shape.checker(rs, cs, &|r,c| shape.cells[(r / rs,c / cs)].colour != Black, &|s| s.invert_colour(), true).to_grid()
         };
 
-        if run_experiment(file, 601, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 601, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let shape = ex.input.grid.as_shape();
@@ -2502,11 +2528,13 @@ println!("139 --- {file}");
             shape.checker(rs, cs, &has_band, &|s| s.clone(), true).to_grid()
         };
 
-        if run_experiment(file, 602, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 602, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let shapes = examples.examples[0].output.grid.template_shapes(&examples.examples[0].input.grid);
 
-        if !shapes.shapes.is_empty() && run_experiment(file, 603, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.grid.fill_template(&shapes.shapes[0]), output) { return; };
+        if !shapes.shapes.is_empty()  {
+            if let Some(rule) = run_experiment(task, 603, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.grid.fill_template(&shapes.shapes[0]), output) { return Some(rule); };
+        }
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() {
@@ -2515,20 +2543,20 @@ println!("139 --- {file}");
 
             let shape = &ex.input.shapes.shapes[0].to_origin();
             let (rs, cs) = shape.dimensions();
-            let mx = rs.max(cs);
+            let mr = rs.max(cs);
             let dim = rs.max(cs) * 2 + rs.min(cs);
             let mut shapes = Shapes::new_sized(dim, dim);
 
-            shapes.shapes.push(shape.to_position(mx, 0));
-            shapes.shapes.push(shape.rotate_90_pos(1, 0, mx));
-            shapes.shapes.push(shape.rotate_90_pos(2, mx, rs + cs));
-            shapes.shapes.push(shape.rotate_90_pos(3, rs + cs, mx));
+            shapes.shapes.push(shape.to_position(mr, 0));
+            shapes.shapes.push(shape.rotate_90_pos(1, 0, mr));
+            shapes.shapes.push(shape.rotate_90_pos(2, mr, rs + cs));
+            shapes.shapes.push(shape.rotate_90_pos(3, rs + cs, mr));
 
 //shapes.to_grid().show();
             shapes.to_grid()
         };
 
-        if run_experiment(file, 604, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 604, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) {
@@ -2555,7 +2583,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 605, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 605, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.shapes.shapes.is_empty() || !cat.contains(&InLessThanOut) || colour_diffs.len() != 1 {
@@ -2580,30 +2608,7 @@ println!("139 --- {file}");
             shape.checker(rs, cs, &|_,_| true, &|s| s.clone(), false).to_grid()
         };
 
-        if run_experiment(file, 606, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
-
-        let first_grid = &examples.examples[0].output.grid;
-        let first_colours = examples.examples[0].input.grid.clone().find_unique_colours();
-        
-        let func = |ex: &Example| {
-            let colours = ex.input.grid.find_unique_colours();
-
-            if ex.input.shapes.shapes.is_empty() || !cat.contains(&InLessThanOut) || first_colours.len() != colours.len() {
-                return Grid::trivial();
-            }
-
-            let mut grid = first_grid.clone();
-
-            for ((r, c), cell) in first_grid.cells.items() {
-                let pos = cell.colour.get_position(&first_colours);
-
-                grid.cells[(r,c)].colour = colours[pos];
-            }
-
-            grid
-        };
-
-        if run_experiment(file, 607, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 606, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let g = &ex.input.grid;
@@ -2619,7 +2624,7 @@ println!("139 --- {file}");
             }
         };
 
-        if run_experiment(file, 608, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 608, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) {
@@ -2635,7 +2640,7 @@ println!("139 --- {file}");
             grid.as_shape().checker(rs, cs, &|_,_| true, &|_| shape.clone(), false).to_grid().trim(out_rs, out_cs)
         };
 
-        if run_experiment(file, 609, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 609, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if colour_diffs.len() != 1 || colour_common.len() != 2 || !cat.contains(&InLessThanOut) {
@@ -2656,7 +2661,7 @@ println!("139 --- {file}");
             }
         };
 
-        if run_experiment(file, 610, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 610, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !ex.input.grid.is_square() || !colour_diffs.is_empty() || colour_common.len() != 1 || !cat.contains(&InLessThanOut) {
@@ -2698,7 +2703,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 611, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 611, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) {
@@ -2711,7 +2716,7 @@ println!("139 --- {file}");
             toddle.as_shape().checker(rs, cs, &|r,c| toddle.cells[(r / rs,c / cs)].colour != Black, &|s| s.clone(), true).to_grid()
         };
 
-        if run_experiment(file, 612, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 612, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) {
@@ -2724,7 +2729,7 @@ println!("139 --- {file}");
             grid.as_shape().checker(cnt, cnt, &|_,_| true, &|s| s.clone(), true).to_grid()
         };
 
-        if run_experiment(file, 613, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 613, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let colour = examples.examples[0].input.grid.max_colour();
         let colour2 = examples.examples[1].input.grid.max_colour();
@@ -2743,7 +2748,7 @@ println!("139 --- {file}");
             grid.clone()
         };
 
-        if run_experiment(file, 614, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 614, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let (out_rs, out_cs) = examples.examples[0].output.grid.dimensions();
         let all_colour_diffs = examples.io_all_colour_diff();
@@ -2771,7 +2776,7 @@ println!("139 --- {file}");
             grid.clone()
         };
 
-        if run_experiment(file, 615, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 615, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) || !colour_diffs.is_empty() {
@@ -2785,7 +2790,7 @@ println!("139 --- {file}");
             grid.clone()
         };
 
-        if run_experiment(file, 616, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 616, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) || colour_diffs.len() != 1 {
@@ -2842,7 +2847,7 @@ println!("139 --- {file}");
             grid
         };
 
-        if run_experiment(file, 617, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 617, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if !cat.contains(&InLessThanOut) || !colour_diffs.is_empty() {
@@ -2868,7 +2873,7 @@ println!("139 --- {file}");
             shape.combined_checker(rs, cs, &action).to_grid()
         };
 
-        if run_experiment(file, 618, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 618, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         /* Does not work yet c92b942c
         let rule = examples.derive_missing_rule();
@@ -2887,8 +2892,53 @@ grid.show();
             grid
         };
 
-        if run_experiment(file, 819, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(file, 819, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         */
+
+        if let Some(rule) = run_experiment(task, 820, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.grid.extend_border(), output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if !cat.contains(&InLessThanOut) || colour_diffs.len() != 1 {
+                return Grid::trivial();
+            }
+
+            let mut grid = ex.input.grid.scale_up(2);
+            let shapes = grid.to_shapes();
+
+            for s in shapes.shapes.iter() {
+                let mr = s.cells.rows - 1;
+                let mc = s.cells.columns - 1;
+
+                grid.draw_mut(UpLeft, s.cells[(0,0)].row, s.cells[(0,0)].col, colour_diffs[0]);
+                grid.draw_mut(DownRight, s.cells[(mr,mc)].row, s.cells[(mr,mc)].col, colour_diffs[0]);
+            }
+
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 821, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if !cat.contains(&InLessThanOut) || colour_diffs.len() != 1 {
+                return Grid::trivial();
+            }
+
+            let rows = ex.input.grid.cells.rows;
+            let cols = ex.input.grid.cells.columns;
+            let mut grid = ex.input.grid.as_shape().checker(rs, cs, &|r,c| r == 0 && c == 0 || r == rows && c == cols , &|s| s.clone(), true).to_grid();
+            let shapes = grid.to_shapes();
+
+            for s in shapes.shapes.iter().skip(1).step_by(2) {
+                grid.draw_mut(Right, s.orow - 1, 0, colour_diffs[0]);
+            }
+//grid.show();
+
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 822, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        if let Some(rule) = run_experiment(task, 823, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.grid.scale_up(ex.input.grid.height()), output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -2897,9 +2947,9 @@ grid.show();
         *cap_cats.entry(gc).or_insert(0) += 1;
 
         if all || cat.contains(&SingleShapeIn) {
-            //if run_experiment_examples(&file, 1120, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return; };
+            //if let Some(rule) = run_experiment_examples(&file, 1120, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return Some(rule); };
 
-            //if run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_move_same_colour(&exs), output) { return; };
+            //if let Some(rule) = run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_move_same_colour(&exs), output) { return Some(rule); };
 
             let func = |gi: &Grid, go: &Grid, n: &mut usize| {
                 let grid = gi.recolour(gi.colour, go.colour);
@@ -2907,7 +2957,7 @@ grid.show();
                 move_only(&grid, n)
             };
 
-            if run_experiment_tries(file, 310, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment_tries(task, 310, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             let func = |gi: &Example| {
                 if gi.input.coloured_shapes.shapes.is_empty() {
@@ -2917,7 +2967,7 @@ grid.show();
                 gi.input.coloured_shapes.shapes[0].to_origin().to_grid()
             };
 
-            if run_experiment(file, 200, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 200, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         if all || !cat.contains(&SingleShapeIn) {
@@ -2948,7 +2998,7 @@ grid.show();
                     grid
                 };
 
-                if run_experiment(file, 400, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 400, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
         }
 
@@ -2958,11 +3008,11 @@ grid.show();
     if all || cat.contains(&gc) { 
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment(file, 201, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.hollow_cnt_unique().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 201, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.hollow_cnt_unique().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 205, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.first().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 205, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.first().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 206, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.last().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 206, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.last().to_grid(), output) { return Some(rule); };
 
         let func = |ex: &Example| {
             for s in &ex.input.shapes.shapes {
@@ -2974,7 +3024,7 @@ grid.show();
             Grid::trivial()
         };
 
-        if run_experiment(file, 207, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 207, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             for s in &ex.input.shapes.shapes {
@@ -2986,7 +3036,7 @@ grid.show();
             Grid::trivial()
         };
 
-        if run_experiment(file, 208, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 208, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let bordered = ex.input.shapes.border_only();
@@ -2998,7 +3048,7 @@ grid.show();
             ex.input.grid.subgrid(bordered.orow + 1, bordered.cells.rows - 2, bordered.ocol + 1, bordered.cells.columns - 2)
         };
 
-        if run_experiment(file, 209, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 209, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -3006,9 +3056,9 @@ grid.show();
     if all || cat.contains(&gc) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        //if run_experiment_examples(&file, 1130, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return; };
+        //if let Some(rule) = run_experiment_examples(&file, 1130, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return Some(rule); };
 
-        //if run_experiment_examples(&file, 1140, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return; };
+        //if let Some(rule) = run_experiment_examples(&file, 1140, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_mirror(&exs), output) { return Some(rule); };
 
         let edge_colour = examples.largest_shape_colour();
 
@@ -3037,7 +3087,7 @@ grid.show();
             Grid::trivial()
         };
 
-        if run_experiment(file, 204, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 204, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             if ex.input.coloured_shapes.is_empty() {
@@ -3057,7 +3107,7 @@ grid.show();
             shapes.to_grid()
         };
 
-        if run_experiment(file, 205, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 205, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         if cat.contains(&InLessCountOut) && cat.contains(&InOutSameSize) {
             let colour = examples.examples[0].output.grid.min_colour();
@@ -3073,7 +3123,7 @@ grid.show();
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 206, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 206, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         if colour_diffs.len() == 1  {
@@ -3121,7 +3171,7 @@ grid.show();
                 shapes.to_grid_transparent()
             };
 
-            if run_experiment(file, 207, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 207, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         *cap_todo.entry(gc).or_insert(0) += 1;
@@ -3155,7 +3205,7 @@ grid.show();
                 grid
             };
 
-            if run_experiment(file, 610, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 610, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         //let black = examples.examples[0].input.grid.to_shapes_base_bg(Red);
@@ -3194,7 +3244,7 @@ grid.show();
             shapes.to_grid()
         };
 
-        if run_experiment(file, 621, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 621, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         if cat.contains(&NoShapesIn(1)) && cat.contains(&NoShapesOut(2)) {
             let extra_colour = examples.examples[0].output.grid.find_min_colour();
@@ -3218,7 +3268,7 @@ grid.show();
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 622, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 622, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         if cat.contains(&NoShapesIn(1)) && cat.contains(&NoColouredShapesOut(1)) {
@@ -3236,7 +3286,7 @@ grid.show();
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 623, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 623, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             let func = |ex: &Example| {
                 if ex.input.shapes.shapes.is_empty() && ex.input.shapes.shapes[0].cells.columns % 2 != 1 {
@@ -3270,7 +3320,7 @@ grid.show();
                 shape.to_grid()
             };
 
-            if run_experiment(file, 624, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 624, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             let colours = examples.examples[0].output.grid.colours();
             let in_colour = examples.examples[0].input.grid.colour;
@@ -3286,7 +3336,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                     Grid::trivial()
                 };
 
-                if run_experiment(file, 635, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(file, 635, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
 */
 
@@ -3319,7 +3369,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                     shape.to_grid()
                 };
 
-                if run_experiment(file, 625, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 625, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
 
             if colours.len() == 2 {
@@ -3348,7 +3398,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                     shapes.to_grid()
                 };
 
-                if run_experiment(file, 626, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 626, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
 
             let func = |ex: &Example| {
@@ -3383,7 +3433,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                 grid
             };
 
-            if run_experiment(file, 627, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 627, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             // a65b410d test and fails 5207a7b5 eval
             for inc in 1 ..= 1 {    // TODO Fix inc for > 1
@@ -3425,7 +3475,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                     shapes.to_grid()
                 };
 
-                if run_experiment(file, 628, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 628, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
 
             let func = |ex: &Example| {
@@ -3444,7 +3494,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                 grid
             };
 
-            if run_experiment(file, 630, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 630, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             let func = |ex: &Example| {
                 if ex.input.shapes.shapes.len() != 1 {
@@ -3476,7 +3526,7 @@ println!("{:?}", ex.output.coloured_shapes.shapes[0]);
                 grid
             };
 
-            if run_experiment(file, 631, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 631, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 //eprintln!("{file}");
 
@@ -3541,7 +3591,7 @@ eprintln!("yes 3");
             shapes.to_grid()
         };
 
-        if run_experiment(file, 632, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 632, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     } 
@@ -3570,7 +3620,7 @@ eprintln!("yes 3");
            shapes.to_grid()
         };
 
-        if run_experiment(file, 633, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 633, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -3609,7 +3659,7 @@ eprintln!("yes 3");
                     grid
                 };
 
-                if run_experiment(file, 634, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 634, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
         }
 
@@ -3644,7 +3694,7 @@ eprintln!("yes 3");
                 Grid::new(rs, cs, Black)
             };
 
-            if run_experiment(file, 210, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 210, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         let func = |ex: &Example| {
@@ -3659,10 +3709,10 @@ eprintln!("yes 3");
             Grid::trivial()
         };
 
-        if run_experiment(file, 222, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 222, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
-        //if run_experiment(file, 230, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_max().to_grid(), output) { return; };
-        if run_experiment(file, 230, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.shapes.find_max().to_grid(), output) { return; };
+        //if let Some(rule) = run_experiment(file, 230, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_max().to_grid(), output) { return Some(rule); };
+        if let Some(rule) = run_experiment(task, 230, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.shapes.find_max().to_grid(), output) { return Some(rule); };
 
         let colour = examples.examples[0].output.grid.colour;
 
@@ -3682,11 +3732,11 @@ eprintln!("yes 3");
             }
         };
 
-        if run_experiment_tries(file, 320, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment_tries(task, 320, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
             let shapes = ex.input.grid.split_2();
-            if shapes.len() != 2 || !ex.cat.contains(&OutXInWidth(2)) || colour_diffs.is_empty() {
+            if shapes.len() != 2 || !ex.cat.contains(&OutRInWidth(2)) || colour_diffs.is_empty() {
                 return Grid::trivial();
             }
 
@@ -3700,7 +3750,7 @@ eprintln!("yes 3");
             }
         };
 
-        if run_experiment(file, 321, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 321, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // Use when divider - ops may be asymetric TODO: unduplicate
         let func = |gi: &Grid, _: &Grid, n: &mut usize| {
@@ -3718,7 +3768,7 @@ eprintln!("yes 3");
             }
         };
 
-        if run_experiment_tries(file, 330, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment_tries(task, 330, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // No divider
         let func = |gi: &Grid, _: &Grid, n: &mut usize| {
@@ -3734,7 +3784,7 @@ eprintln!("yes 3");
             }
         };
 
-        if run_experiment_tries(file, 340, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment_tries(task, 340, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let colours = examples.examples[0].input.grid.cell_colour_cnt_map();
         let side = examples.examples[0].output.grid.cells.rows;
@@ -3759,7 +3809,7 @@ eprintln!("yes 3");
                 Grid::colour_every_nxn_for_m(colour, side, size, m)
             };
 
-            if run_experiment(file, 240, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 240, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         let (rs, cs) = examples.examples[0].output.grid.dimensions();
@@ -3778,7 +3828,7 @@ eprintln!("yes 3");
             Grid::new(rs, cs, colour)
         };
 
-        if run_experiment(file, 241, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 241, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         // 3d31c5b3 281123b4
         for order in permutations(&[0,1,2,3]) {
@@ -3806,7 +3856,7 @@ eprintln!("yes 3");
                 }
             };
 
-            if run_experiment(file, 250, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 250, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
 
         *cap_todo.entry(gc).or_insert(0) += 1;
@@ -3815,7 +3865,7 @@ eprintln!("yes 3");
     if all || cat.contains(&gc) { 
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        //if run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_div9(&exs), output) { return; };
+        //if let Some(rule) = run_experiment_examples(&file, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_div9(&exs), output) { return Some(rule); };
 
         let colour_map = examples.find_colour_io_map();
 
@@ -3831,7 +3881,7 @@ eprintln!("yes 3");
                 shapes.to_grid()
         };
 
-        if run_experiment(file, 251, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 251, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     } 
@@ -3839,7 +3889,7 @@ eprintln!("yes 3");
     if all || cat.contains(&gc) || cat.contains(&GravityUp) { 
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment_tries(file, 350, experiment, trans, is_test, examples, &targets, done, tries, &|ex, _, n| gravity_only(ex, n), output) { return; };
+        if let Some(rule) = run_experiment_tries(task, 350, experiment, trans, is_test, examples, &targets, done, tries, &|ex, _, n| gravity_only(ex, n), output) { return Some(rule); };
 
         let func = |ex: &Example| {
                 let mut shapes = ex.input.shapes.clone();
@@ -3865,7 +3915,7 @@ eprintln!("yes 3");
                 grid.flood_fill(grid.cells.rows - 1, 0, NoColour, fill_colour)
         };
 
-        if run_experiment(file, 251, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 251, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     } 
@@ -3896,7 +3946,7 @@ eprintln!("yes 3");
                 diff.to_grid().diff_only(colour, *n)
             };
 
-            if run_experiment_tries(file, 500, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment_tries(file, 500, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 */
 
             if !examples.examples.is_empty() && !examples.examples[0].input.shapes.shapes.is_empty() {
@@ -3933,7 +3983,7 @@ eprintln!("yes 3");
                     si.to_grid()
                 };
 
-                if run_experiment(file, 270, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 270, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
                 let func = |gi: &Example| {
                     if gi.input.shapes.is_empty() {
@@ -3951,7 +4001,7 @@ eprintln!("yes 3");
                     si.to_grid()
                 };
 
-                if run_experiment(file, 281, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 281, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
 
             let ccm = examples.find_hollow_cnt_colour_map();
@@ -3975,7 +4025,7 @@ eprintln!("yes 3");
                 shapes.to_grid()
             };
 
-            if run_experiment(file, 282, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(task, 282, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             /* TODO 759f3fd3 translate_absolute_clip
             let sq_colour = if !examples.examples.is_empty() && !examples.examples[0].output.shapes.shapes.is_empty() {
@@ -4016,7 +4066,7 @@ shapes.trim_to_grid().show();
                 shapes.trim_to_grid()
             };
 
-            if run_experiment(file, 280, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+            if let Some(rule) = run_experiment(file, 280, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             */
         }
 
@@ -4026,13 +4076,13 @@ shapes.trim_to_grid().show();
     if all || cat.contains(&gc) && !cat.contains(&SingleColourIn) {
         *cap_cats.entry(gc).or_insert(0) += 1;
 
-        if run_experiment(file, 290, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_pixels_min().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 290, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_pixels_min().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 300, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_pixels_max().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 300, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.find_pixels_max().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 301, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.hollow_cnt_max().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 301, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.hollow_cnt_max().to_grid(), output) { return Some(rule); };
 
-        if run_experiment(file, 302, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.hollow_cnt_min().to_grid(), output) { return; };
+        if let Some(rule) = run_experiment(task, 302, experiment, trans, is_test, examples, &targets, done, tries, &|ex| ex.input.coloured_shapes.hollow_cnt_min().to_grid(), output) { return Some(rule); };
 
         let out_colours = examples.find_output_colours();
 
@@ -4078,7 +4128,7 @@ shapes.trim_to_grid().show();
                   Grid::trivial()
                 };
 
-                if run_experiment(file, 303, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+                if let Some(rule) = run_experiment(task, 303, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
             }
         }
 
@@ -4094,7 +4144,7 @@ shapes.trim_to_grid().show();
             Grid::new(rs, cs, largest.colour)
         };
 
-        if run_experiment(file, 304, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 304, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     } 
@@ -4127,7 +4177,7 @@ shapes.trim_to_grid().show();
         grid
     };
 
-    if run_experiment(file, 1000, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1000, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     let out_shapes = examples.all_shapes_out();
 
@@ -4148,7 +4198,7 @@ shapes.trim_to_grid().show();
         shapes.to_grid()
     };
 
-    if run_experiment(file, 1001, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1001, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     let func = |ex: &Example| {
         let mut shapes = ex.input.shapes.clone();
@@ -4168,7 +4218,7 @@ shapes.trim_to_grid().show();
         shapes.to_grid()
     };
 
-    if run_experiment(file, 1002, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1002, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     // Cross example knowledge needed for closure
     let h = examples.bleached_io_map();
@@ -4181,7 +4231,7 @@ shapes.trim_to_grid().show();
         }
     };
 
-    if run_experiment(file, 1003, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1003, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     if (all || cat.contains(&InOutSameShapesColoured)) && !examples.examples[0].output.shapes.shapes.is_empty() {
         let mut pairs: BTreeMap<Shape, Shape> = BTreeMap::new();
@@ -4211,7 +4261,7 @@ shapes.trim_to_grid().show();
             shapes.to_grid()
         };
 
-        if run_experiment(file, 1004, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+        if let Some(rule) = run_experiment(task, 1004, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
     }
 
     let func = |ex: &Example| {
@@ -4220,7 +4270,7 @@ shapes.trim_to_grid().show();
         Shapes::new_shapes(&[shape]).to_grid()
     };
 
-    if run_experiment(file, 1005, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1005, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     let func = &|ex: &Example| {
         let len = ex.input.shapes.shapes.len();
@@ -4262,7 +4312,7 @@ shapes.trim_to_grid().show();
         shapes.to_grid_colour(bg)
     };
 
-    if run_experiment(file, 1006, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1006, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     let in_colour = examples.examples[0].output.grid.get_diff_colour(&examples.examples[0].input.grid);
     let colour = examples.examples[0].io_colour_diff();
@@ -4279,69 +4329,98 @@ shapes.trim_to_grid().show();
         shapes.to_grid()
     };
 
-    if run_experiment(file, 1007, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return; };
+    if let Some(rule) = run_experiment(task, 1007, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+    let in_grid = &examples.examples[0].input.grid;
+    let out_grid = &examples.examples[0].output.grid;
+    
+    let func = |ex: &Example| {
+        if ex.input.shapes.shapes.is_empty() || NxNIn(0).gte_value(&NxNOut(0), &cat) {
+            return Grid::trivial();
+        }
+
+        let colour_map: BTreeMap<Colour,Colour> = in_grid.cells.values()
+            .zip(ex.input.grid.cells.values())
+            .map(|(k,v)| (k.colour,v.colour))
+            .collect();
+
+        let mut grid = out_grid.clone();
+
+        for ((r, c), cell) in out_grid.cells.items() {
+            match colour_map.get(&cell.colour) {
+                Some(colour) => grid.cells[(r,c)].colour = *colour,
+                None => return Grid::trivial()
+            }
+        }
+
+        grid
+    };
+
+    if let Some(rule) = run_experiment(task, 1008, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     *cap_todo.entry(CatchAll).or_insert(0) += 1;
+
+    None
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_experiment(file: &str, experiment: usize, experiment_todo: &str, trans: Transformation, is_test: bool, examples: &Examples, targets: &[Grid], done: &mut BTreeSet<String>, tries: &mut usize, func: &(dyn Fn(&Example) -> Grid + std::panic::RefUnwindSafe), output: &mut BTreeMap<String, Vec<OutputData>>) -> bool {
+fn run_experiment(task: &str, experiment: usize, experiment_todo: &str, trans: Transformation, is_test: bool, examples: &Examples, targets: &[Grid], done: &mut BTreeSet<String>, tries: &mut usize, func: &(dyn Fn(&Example) -> Grid + std::panic::RefUnwindSafe), output: &mut BTreeMap<String, Vec<OutputData>>) -> Option<usize> {
     if !experiment_todo.is_empty() {
         if let Ok(ex) = experiment_todo.parse::<usize>() {
             if ex != experiment {
-                return false;
+                return None;
             }
         } 
     }
-    if done.contains(file) {   // already done???
-        return true;
+    if done.contains(task) {   // already done???
+        return Some(usize::MAX);
     }
 
-    let ans = panic::catch_unwind(|| experiment_example(examples, file, experiment, trans, func));
+    let ans = panic::catch_unwind(|| experiment_example(examples, task, experiment, trans, func));
 
     let ans = match ans {
         Ok(ans) => ans,
         Err(e) => {
-            eprintln!("{file} / {experiment} Exception: {e:?}");
+            eprintln!("{task} / {experiment} Exception: {e:?}");
             vec![Grid::trivial()]
         },
     };
 
     *tries += 1;
 
-    save(file, experiment, trans, is_test, &ans, targets, done, output)
+    save(task, experiment, trans, is_test, &ans, targets, done, output)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_experiment_tries(file: &str, experiment: usize, experiment_todo: &str, trans: Transformation, is_test: bool, examples: &Examples, targets: &[Grid], done: &mut BTreeSet<String>, tries: &mut usize, func: &(dyn Fn(&Grid, &Grid, &mut usize) -> Grid + RefUnwindSafe), output: &mut BTreeMap<String, Vec<OutputData>>) -> bool {
+fn run_experiment_tries(task: &str, experiment: usize, experiment_todo: &str, trans: Transformation, is_test: bool, examples: &Examples, targets: &[Grid], done: &mut BTreeSet<String>, tries: &mut usize, func: &(dyn Fn(&Grid, &Grid, &mut usize) -> Grid + RefUnwindSafe), output: &mut BTreeMap<String, Vec<OutputData>>) -> Option<usize> {
     if !experiment_todo.is_empty() {
         if let Ok(ex) = experiment_todo.parse::<usize>() {
             if ex != experiment {
-                return false;
+                return None;
             }
         } 
     }
-    if done.contains(file) {   // already done???
-        return true;
+    if done.contains(task) {   // already done???
+        return Some(usize::MAX);
     }
 
-    let ans = panic::catch_unwind(|| experiment_grid(examples, file, experiment, trans, func));
+    let ans = panic::catch_unwind(|| experiment_grid(examples, task, experiment, trans, func));
 
     let ans = match ans {
         Ok(ans) => ans,
         Err(e) => {
-            eprintln!("{file} / {experiment} Exception: {e:?}");
+            eprintln!("{task} / {experiment} Exception: {e:?}");
             vec![Grid::trivial()]
         },
     };
 
     *tries += 1;
 
-    save(file, experiment, trans, is_test, &ans, targets, done, output)
+    save(task, experiment, trans, is_test, &ans, targets, done, output)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn save(file: &str, experiment: usize, trans: Transformation, is_test: bool, ans: &[Grid], targets: &[Grid], done: &mut BTreeSet<String>, results: &mut BTreeMap<String, Vec<OutputData>>) -> bool {
+fn save(task: &str, experiment: usize, trans: Transformation, is_test: bool, ans: &[Grid], targets: &[Grid], done: &mut BTreeSet<String>, results: &mut BTreeMap<String, Vec<OutputData>>) -> Option<usize> {
     let target_size: usize = targets.iter().map(|target| target.size()).sum();
     let ans_size: usize = ans.iter().map(|ans| ans.size()).sum();
     let same = if target_size > 0 && ans_size > 0 {
@@ -4360,36 +4439,46 @@ fn save(file: &str, experiment: usize, trans: Transformation, is_test: bool, ans
 
     if !is_test {
         if same {
-            add_real_output(file, ans, results);
+            add_real_output(task, ans, results);
 
-            done.insert(file.to_string());
-            println!("Success: {experiment:>05} {trans:?} / {file}");
+            done.insert(task.to_string());
+            println!("Success: {experiment:>05} {trans:?} / {task}");
 
-            true
+            Some(experiment)
         } else if ans_size > 0 {
-            add_dummy_output(file, ans.len(), results);
+            add_dummy_output(task, ans.len(), results);
 
             let dist = ans[0].distance(&targets[0]);
 
-            println!("Final Test Failed : {experiment:>05} {trans:?} / {file} by {dist:.4}");
+            println!("Final Test Failed : {experiment:>05} {trans:?} / {task} by {dist:.4}");
 
-            false
+            None
         } else {
-            add_dummy_output(file, ans.len(), results);
+            add_dummy_output(task, ans.len(), results);
 
-            false
+            None
         }
 
     } else if ans_size > 0 {
-        add_real_output(file, ans, results);
+        add_real_output(task, ans, results);
 
-        done.insert(file.to_string());
-        println!("Test Success: {experiment:>05} {trans:?} / {file}");
+        done.insert(task.to_string());
+        println!("Test Success: {experiment:>05} {trans:?} / {task}");
 
-        true
+        Some(experiment)
     } else {
-        add_dummy_output(file, ans.len(), results);
+        add_dummy_output(task, ans.len(), results);
 
-        false
+        None
     }
+}
+
+fn format(rule_tasks: &BTreeMap<usize, Vec<String>>) {
+    println!();
+    println!("Rule solving tasks:");
+    println!("-------------------");
+    for (k, v) in rule_tasks.iter() {
+        println!("{k:<5}: {v:?}");
+    }
+    println!();
 }

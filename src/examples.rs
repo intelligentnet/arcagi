@@ -162,10 +162,10 @@ impl Example {
             }
             */
             if input.grid.mirrored_rows().to_json() == output.grid.to_json() {
-                cats.insert(MirroredX);
+                cats.insert(MirroredR);
             }
             if input.grid.mirrored_cols().to_json() == output.grid.to_json() {
-                cats.insert(MirroredY);
+                cats.insert(MirroredC);
             }
         } else {
             if in_dim.0 == out_dim.0 && in_dim.1 == out_dim.1 {
@@ -188,14 +188,14 @@ impl Example {
         }
         if out_dim.0 > 0 {
             if in_dim.0 % out_dim.0 == 0 && in_dim.0 != out_dim.0 {
-                cats.insert(OutXInWidth(in_dim.0 / out_dim.0));
+                cats.insert(OutRInWidth(in_dim.0 / out_dim.0));
             } else if in_dim.1 % out_dim.1 == 0 && in_dim.1 != out_dim.1 {
-                cats.insert(OutXInHeight(in_dim.1 / out_dim.1));
+                cats.insert(OutRInHeight(in_dim.1 / out_dim.1));
             }
             if out_dim.0 % in_dim.0 == 0 && out_dim.0 != in_dim.0 {
-                cats.insert(InXOutWidth(out_dim.0 / in_dim.0));
+                cats.insert(InROutWidth(out_dim.0 / in_dim.0));
             } else if out_dim.1 % in_dim.1 == 0 && out_dim.1 != in_dim.1 {
-                cats.insert(InXOutHeight(out_dim.1 / in_dim.1));
+                cats.insert(InROutHeight(out_dim.1 / in_dim.1));
             }
         }
         if out_dim.0 == 1 && out_dim.1 == 1 {
@@ -230,16 +230,16 @@ impl Example {
         let out_is_mirror_x = output.grid.is_mirror_rows();
         let out_is_mirror_y = output.grid.is_mirror_cols();
         if in_is_mirror_x {
-            cats.insert(MirrorXIn);
+            cats.insert(MirrorRIn);
         }
         if in_is_mirror_y {
-            cats.insert(MirrorYIn);
+            cats.insert(MirrorCIn);
         }
         if out_is_mirror_x {
-            cats.insert(MirrorXOut);
+            cats.insert(MirrorROut);
         }
         if out_is_mirror_y {
-            cats.insert(MirrorYOut);
+            cats.insert(MirrorCOut);
         }
         /*
         if input.grid_likelyhood() > 0.5 {
@@ -283,16 +283,16 @@ impl Example {
             cats.insert(BGGridOutColoured);
         }
         if input.grid.is_panelled_rows() {
-            cats.insert(IsPanelledXIn);
+            cats.insert(IsPanelledRIn);
         }
         if output.grid.is_panelled_rows() {
-            cats.insert(IsPanelledXOut);
+            cats.insert(IsPanelledROut);
         }
         if input.grid.is_panelled_cols() {
-            cats.insert(IsPanelledYIn);
+            cats.insert(IsPanelledCIn);
         }
         if output.grid.is_panelled_cols() {
-            cats.insert(IsPanelledYOut);
+            cats.insert(IsPanelledCOut);
         }
         let in_no_colours = input.grid.no_colours();
         let out_no_colours = output.grid.no_colours();

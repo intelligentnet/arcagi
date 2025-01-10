@@ -339,16 +339,6 @@ impl Sub for Colour {
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GridCategory {
-    /*
-    MirrorXInSkewL,
-    MirrorYInSkewL,
-    MirrorXOutSkewL,
-    MirrorYOutSkewL,
-    MirrorXInSkewR,
-    MirrorYInSkewR,
-    MirrorXOutSkewR,
-    MirrorYOutSkewR,
-    */
     HasArms,
     BareCornersIn,
     BareCornersOut,
@@ -408,30 +398,31 @@ pub enum GridCategory {
     InSquare,
     InToSquaredOut,
     InvTranspose,
-    InXOutHeight(usize),
-    InXOutWidth(usize),
+    InROutHeight(usize),
+    InROutWidth(usize),
     Is3x3In,
     Is3x3Out,
-    IsPanelledXIn,
-    IsPanelledXOut,
-    IsPanelledYIn,
-    IsPanelledYOut,
-    MirroredX,
-    MirroredY,
-    MirrorXIn,
-    MirrorXOut,
-    MirrorYIn,
-    MirrorYOut,
+    IsPanelledRIn,
+    IsPanelledROut,
+    IsPanelledCIn,
+    IsPanelledCOut,
+    MirroredR,
+    MirroredC,
+    MirrorRIn,
+    MirrorROut,
+    MirrorCIn,
+    MirrorCOut,
     NoColoursIn(usize),
     NoColoursOut(usize),
     NoColouredShapesIn(usize),
     NoColouredShapesOut(usize),
+    NotCat,
     NoShapesIn(usize),
     NoShapesOut(usize),
     NxNIn(usize),
     NxNOut(usize),
-    OutXInHeight(usize),
-    OutXInWidth(usize),
+    OutRInHeight(usize),
+    OutRInWidth(usize),
     OutLessCountIn,
     OutLessCountInColoured,
     OutLessThanIn,
@@ -499,18 +490,26 @@ impl GridCategory {
         self.same(other) && self.get_para() >= other.get_para()
     }
 
-    fn get_para(&self) -> usize {
+    pub fn get_para(&self) -> usize {
         match self {
-            GridCategory::NoColouredShapesIn(i) => *i,
-            GridCategory::NoColouredShapesOut(i) => *i,
+            GridCategory::InROutHeight(i) => *i,
+            GridCategory::InROutWidth(i) => *i,
             GridCategory::NoColoursIn(i) => *i,
             GridCategory::NoColoursOut(i) => *i,
+            GridCategory::NoColouredShapesIn(i) => *i,
+            GridCategory::NoColouredShapesOut(i) => *i,
             GridCategory::NoShapesIn(i) => *i,
             GridCategory::NoShapesOut(i) => *i,
+            GridCategory::NxNIn(i) => *i,
+            GridCategory::NxNOut(i) => *i,
+            GridCategory::OutRInHeight(i) => *i,
+            GridCategory::OutRInWidth(i) => *i,
             GridCategory::ShapeMaxCntIn(i) => *i,
             GridCategory::ShapeMaxCntOut(i) => *i,
             GridCategory::ShapeMinCntIn(i) => *i,
             GridCategory::ShapeMinCntOut(i) => *i,
+            GridCategory::SingleColourCountIn(i) => *i,
+            GridCategory::SingleColourCountOut(i) => *i,
             GridCategory::SquareShapeSide(i) => *i,
             GridCategory::SquareShapeSize(i) => *i,
             _ => usize::MAX
@@ -520,6 +519,57 @@ impl GridCategory {
     pub fn same(&self, other: &Self) -> bool {
         core::mem::discriminant(self) == core::mem::discriminant(other)
     }
+
+    pub fn exists(&self, set: &BTreeSet<GridCategory>) -> bool {
+        for i in set.iter() {
+            if self.same(&i) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn get(&self, set: &BTreeSet<GridCategory>) -> GridCategory {
+        for cat in set.iter() {
+            if self.same(&cat) {
+                return *cat;
+            }
+        }
+
+        GridCategory::NotCat
+    }
+
+    pub fn value(&self, set: &BTreeSet<GridCategory>) -> usize {
+        for cat in set.iter() {
+            if self.same(&cat) {
+                return cat.get_para();
+            }
+        }
+
+        usize::MAX
+    }
+
+    pub fn eq_value(&self, other: &Self, cats: &BTreeSet<GridCategory>) -> bool {
+        self.same(other) && self.value(cats) == other.value(cats)
+    }
+
+    pub fn lt_value(&self, other: &Self, cats: &BTreeSet<GridCategory>) -> bool {
+        self.same(other) && self.value(cats) < other.value(cats)
+    }
+
+    pub fn gt_value(&self, other: &Self, cats: &BTreeSet<GridCategory>) -> bool {
+        self.same(other) && self.value(cats) > other.value(cats)
+    }
+
+    pub fn lte_value(&self, other: &Self, cats: &BTreeSet<GridCategory>) -> bool {
+        self.same(other) && self.value(cats) <= other.value(cats)
+    }
+
+    pub fn gte_value(&self, other: &Self, cats: &BTreeSet<GridCategory>) -> bool {
+        self.same(other) && self.value(cats) >= other.value(cats)
+    }
+
 }
 
 #[repr(usize)]
@@ -594,48 +644,48 @@ impl Direction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, EnumIter, EnumString)]
 pub enum Transformation {   // TODO mimimise this list, some are equivalent
     NoTrans,
-    MirrorX,
-    MirrorY,
+    MirrorRow,
+    MirrorCol,
     Trans,
     Rotate90,
     Rotate180,
     Rotate270,
-    Rotate90MirrorX,
-    Rotate180MirrorX,
-    Rotate270MirrorX,
-    Rotate90MirrorY,
-    Rotate180MirrorY,
-    Rotate270MirrorY,
-    MirrorXRotate90,
-    MirrorXRotate180,
-    MirrorXRotate270,
-    MirrorYRotate90,
-    MirrorYRotate180,
-    MirrorYRotate270,
+    Rotate90MirrorRow,
+    Rotate180MirrorRow,
+    Rotate270MirrorRow,
+    Rotate90MirrorCol,
+    Rotate180MirrorCol,
+    Rotate270MirrorCol,
+    MirrorRowRotate90,
+    MirrorRowRotate180,
+    MirrorRowRotate270,
+    MirrorColRotate90,
+    MirrorColRotate180,
+    MirrorColRotate270,
 }
 
 impl Transformation {
     pub fn inverse(&self) -> Self {
         match self {
             Self::NoTrans           => Self::NoTrans,
-            Self::MirrorX           => Self::MirrorX,
-            Self::MirrorY           => Self::MirrorY,
+            Self::MirrorRow           => Self::MirrorRow,
+            Self::MirrorCol           => Self::MirrorCol,
             Self::Trans             => Self::Trans,
             Self::Rotate90          => Self::Rotate270,
             Self::Rotate180         => Self::Rotate180,
             Self::Rotate270         => Self::Rotate90,
-            Self::Rotate90MirrorX   => Self::MirrorXRotate270,
-            Self::Rotate180MirrorX  => Self::MirrorXRotate180,
-            Self::Rotate270MirrorX  => Self::MirrorXRotate90,
-            Self::Rotate90MirrorY   => Self::MirrorYRotate270,
-            Self::Rotate180MirrorY  => Self::MirrorYRotate180,
-            Self::Rotate270MirrorY  => Self::MirrorYRotate90,
-            Self::MirrorXRotate90   => Self::Rotate270MirrorX,
-            Self::MirrorXRotate180  => Self::Rotate180MirrorX,
-            Self::MirrorXRotate270  => Self::Rotate90MirrorX,
-            Self::MirrorYRotate90   => Self::Rotate270MirrorY,
-            Self::MirrorYRotate180  => Self::Rotate180MirrorY,
-            Self::MirrorYRotate270  => Self::Rotate90MirrorY,
+            Self::Rotate90MirrorRow   => Self::MirrorRowRotate270,
+            Self::Rotate180MirrorRow  => Self::MirrorRowRotate180,
+            Self::Rotate270MirrorRow  => Self::MirrorRowRotate90,
+            Self::Rotate90MirrorCol   => Self::MirrorColRotate270,
+            Self::Rotate180MirrorCol  => Self::MirrorColRotate180,
+            Self::Rotate270MirrorCol  => Self::MirrorColRotate90,
+            Self::MirrorRowRotate90   => Self::Rotate270MirrorRow,
+            Self::MirrorRowRotate180  => Self::Rotate180MirrorRow,
+            Self::MirrorRowRotate270  => Self::Rotate90MirrorRow,
+            Self::MirrorColRotate90   => Self::Rotate270MirrorCol,
+            Self::MirrorColRotate180  => Self::Rotate180MirrorCol,
+            Self::MirrorColRotate270  => Self::Rotate90MirrorCol,
         }
     }
 }
@@ -646,25 +696,25 @@ impl FromStr for Transformation {
 
     fn from(input: &str) -> Result<Self, Self::Err> {
         match input {
-            "NoTrans"        	=> Ok(Self::NoTrans),
-            "MirrorX"        	=> Ok(Self::MirrorX),
-            "MirrorY"	        => Ok(Self::MirrorY),
-            "Trans"	            => Ok(Self::Trans),
-            "Rotate90"	        => Ok(Self::Rotate90),
-            "Rotate180"	        => Ok(Self::Rotate180),
-            "Rotate270"	        => Ok(Self::Rotate270),
-            "Rotate90MirrorX"	=> Ok(Self::Rotate90MirrorX),
-            "Rotate180MirrorX"	=> Ok(Self::Rotate180MirrorX),
-            "Rotate270MirrorX"	=> Ok(Self::Rotate270MirrorX),
-            "Rotate90MirrorY"	=> Ok(Self::Rotate90MirrorY),
-            "Rotate180MirrorY"	=> Ok(Self::Rotate180MirrorY),
-            "Rotate270MirrorY"	=> Ok(Self::Rotate270MirrorY),
-            "MirrorXRotate90"	=> Ok(Self::MirrorXRotate90),
-            "MirrorXRotate180"	=> Ok(Self::MirrorXRotate180),
-            "MirrorXRotate270"	=> Ok(Self::MirrorXRotate270),
-            "MirrorYRotate90"	=> Ok(Self::MirrorYRotate90),
-            "MirrorYRotate180"	=> Ok(Self::MirrorYRotate180),
-            "MirrorYRotate270"	=> Ok(Self::MirrorYRotate270),
+            "NoTrans"        	  => Ok(Self::NoTrans),
+            "MirrorRow"        	  => Ok(Self::MirrorRow),
+            "MirrorCol"	          => Ok(Self::MirrorCol),
+            "Trans"	              => Ok(Self::Trans),
+            "Rotate90"	          => Ok(Self::Rotate90),
+            "Rotate180"	          => Ok(Self::Rotate180),
+            "Rotate270"	          => Ok(Self::Rotate270),
+            "Rotate90MirrorRow"	  => Ok(Self::Rotate90MirrorRow),
+            "Rotate180MirrorRow"  => Ok(Self::Rotate180MirrorRow),
+            "Rotate270MirrorRow"  => Ok(Self::Rotate270MirrorRow),
+            "Rotate90MirrorCol"	  => Ok(Self::Rotate90MirrorCol),
+            "Rotate180MirrorCol"  => Ok(Self::Rotate180MirrorCol),
+            "Rotate270MirrorCol"  => Ok(Self::Rotate270MirrorCol),
+            "MirrorRowRotate90"	  => Ok(Self::MirrorRowRotate90),
+            "MirrorRowRotate180"  => Ok(Self::MirrorRowRotate180),
+            "MirrorRowRotate270"  => Ok(Self::MirrorRowRotate270),
+            "MirrorColRotate90"	  => Ok(Self::MirrorColRotate90),
+            "MirrorColRotate180"  => Ok(Self::MirrorColRotate180),
+            "MirrorColRotate270"  => Ok(Self::MirrorColRotate270),
             _ => todo!(),
         }
     }
@@ -701,8 +751,8 @@ pub enum ShapeEdgeCategory {
     Gravity,
     HasArm,
     Left,
-    MirroredX,
-    MirroredY,
+    MirroredRow,
+    MirroredCol,
     Right,
     Rot180,
     Rot270,

@@ -604,6 +604,43 @@ impl Grid {
         }
     }
 
+    pub fn extend_border(&self) -> Self {
+        let mut grid = Grid::new(self.cells.rows + 2, self.cells.columns + 2, Black);
+
+        for ((r, c), cell) in self.cells.items() {
+            grid.cells[(r + 1,c + 1)].row = r + 1;
+            grid.cells[(r + 1,c + 1)].col = c + 1;
+            grid.cells[(r + 1,c + 1)].colour = cell.colour;
+        }
+
+        grid.colour = self.colour;
+
+        let rows = grid.cells.rows;
+        let cols = grid.cells.columns;
+
+        for r in 0 .. rows {
+            grid.cells[(r,0)].row = r;
+            grid.cells[(r,0)].col = 0;
+            grid.cells[(r,0)].colour = grid.cells[(r,1)].colour;
+
+            grid.cells[(r,cols-1)].row = r;
+            grid.cells[(r,cols-1)].col = cols-2;
+            grid.cells[(r,cols-1)].colour = grid.cells[(r,cols-2)].colour;
+        }
+
+        for c in 0 .. cols {
+            grid.cells[(0,c)].row = 0;
+            grid.cells[(0,c)].col = c;
+            grid.cells[(0,c)].colour = grid.cells[(1,c)].colour;
+
+            grid.cells[(rows-1,c)].row = rows-2;
+            grid.cells[(rows-1,c)].col = c;
+            grid.cells[(rows-1,c)].colour = grid.cells[(rows-2,c)].colour;
+        }
+
+        grid
+    }
+
     fn extend(&self, lr: bool) -> Self {
         self.extend_by(lr, 2)
     }
@@ -822,24 +859,24 @@ impl Grid {
     pub fn transform(&self, trans: Transformation) -> Self {
         match trans {
             NoTrans          => self.clone(),
-            MirrorX          => self.mirrored_rows(),
-            MirrorY          => self.mirrored_cols(),
+            MirrorRow          => self.mirrored_rows(),
+            MirrorCol          => self.mirrored_cols(),
             Trans            => self.transposed(),
             Rotate90         => self.rot_rect_90(),
             Rotate180        => self.rot_rect_180(),
             Rotate270        => self.rot_rect_270(),
-            Rotate90MirrorX  => self.rot_rect_90().mirrored_rows(),
-            Rotate180MirrorX => self.rot_rect_180().mirrored_rows(),
-            Rotate270MirrorX => self.rot_rect_270().mirrored_rows(),
-            Rotate90MirrorY  => self.rot_rect_90().mirrored_cols(),
-            Rotate180MirrorY => self.rot_rect_180().mirrored_cols(),
-            Rotate270MirrorY => self.rot_rect_270().mirrored_cols(),
-            MirrorXRotate90  => self.mirrored_rows().rot_rect_90(),
-            MirrorXRotate180 => self.mirrored_rows().rot_rect_180(),
-            MirrorXRotate270 => self.mirrored_rows().rot_rect_270(),
-            MirrorYRotate90  => self.mirrored_cols().rot_rect_90(),
-            MirrorYRotate180 => self.mirrored_cols().rot_rect_180(),
-            MirrorYRotate270 => self.mirrored_cols().rot_rect_270(),
+            Rotate90MirrorRow  => self.rot_rect_90().mirrored_rows(),
+            Rotate180MirrorRow => self.rot_rect_180().mirrored_rows(),
+            Rotate270MirrorRow => self.rot_rect_270().mirrored_rows(),
+            Rotate90MirrorCol  => self.rot_rect_90().mirrored_cols(),
+            Rotate180MirrorCol => self.rot_rect_180().mirrored_cols(),
+            Rotate270MirrorCol => self.rot_rect_270().mirrored_cols(),
+            MirrorRowRotate90  => self.mirrored_rows().rot_rect_90(),
+            MirrorRowRotate180 => self.mirrored_rows().rot_rect_180(),
+            MirrorRowRotate270 => self.mirrored_rows().rot_rect_270(),
+            MirrorColRotate90  => self.mirrored_cols().rot_rect_90(),
+            MirrorColRotate180 => self.mirrored_cols().rot_rect_180(),
+            MirrorColRotate270 => self.mirrored_cols().rot_rect_270(),
         }
     }
 
@@ -3069,6 +3106,10 @@ println!("BG not Black {:?}", s.colour);
         grid
     }
 
+    pub fn corner_colours(&self) -> (Colour, Colour, Colour, Colour) {
+        (self.cells[(0,0)].colour, self.cells[(self.cells.rows - 1, 0)].colour, self.cells[(0, self.cells.columns - 1)].colour, self.cells[(self.cells.rows - 1, self.cells.columns - 1)].colour)
+    }
+
     pub fn corner_idx(&self) -> (Self, Direction) {
         let g = self.subgrid(0, 2, 0, 2);
         if g.no_colours() == 4 {
@@ -3091,14 +3132,14 @@ println!("BG not Black {:?}", s.colour);
     }
 
     pub fn corner_body(&self, dir: Direction) -> Self {
-        let hx = self.cells.rows - 2;
-        let hy = self.cells.columns - 2;
+        let hr = self.cells.rows - 2;
+        let hc = self.cells.columns - 2;
 
         match dir {
-            FromUpLeft => self.subgrid(0, hx, 0, hy),
-            FromDownRight => self.subgrid(self.cells.rows - hx, hx, self.cells.columns - hy, hy),
-            FromDownLeft => self.subgrid(self.cells.rows - hx, hx, 0, hy),
-            FromUpRight => self.subgrid(0, hx, self.cells.columns - hy, hy),
+            FromUpLeft => self.subgrid(0, hr, 0, hc),
+            FromDownRight => self.subgrid(self.cells.rows - hr, hr, self.cells.columns - hc, hc),
+            FromDownLeft => self.subgrid(self.cells.rows - hr, hr, 0, hc),
+            FromUpRight => self.subgrid(0, hr, self.cells.columns - hc, hc),
             _ => self.clone(),
         }
     }
@@ -3142,25 +3183,25 @@ println!("BG not Black {:?}", s.colour);
         */
 
         let (s1, s2, s3, s4) = if rows > cols {
-            let qx = rows / 4;
-            if qx * 4 >= rows {
+            let qr = rows / 4;
+            if qr * 4 >= rows {
                 dr = 0;
             }
 
-            (self.subgrid(0, qx, 0, cols),
-            self.subgrid(qx + dr, qx, 0, cols),
-            self.subgrid((qx + dr) * 2, qx, 0, cols),
-            self.subgrid((qx + dr) * 3, qx, 0, cols))
+            (self.subgrid(0, qr, 0, cols),
+            self.subgrid(qr + dr, qr, 0, cols),
+            self.subgrid((qr + dr) * 2, qr, 0, cols),
+            self.subgrid((qr + dr) * 3, qr, 0, cols))
         } else {
-            let qy = cols / 4;
-            if qy * 4 >= cols {
+            let qc = cols / 4;
+            if qc * 4 >= cols {
                 dc = 0;
             }
 
-            (self.subgrid(0, rows, 0, qy),
-            self.subgrid(0, rows, qy + dc, qy),
-            self.subgrid(0, rows, (qy + dc) * 2, qy),
-            self.subgrid(0, rows, (qy + dc) * 3, qy))
+            (self.subgrid(0, rows, 0, qc),
+            self.subgrid(0, rows, qc + dc, qc),
+            self.subgrid(0, rows, (qc + dc) * 2, qc),
+            self.subgrid(0, rows, (qc + dc) * 3, qc))
         };
 
         shapes.shapes = vec![s1.as_shape(), s2.as_shape(), s3.as_shape(), s4.as_shape()];
