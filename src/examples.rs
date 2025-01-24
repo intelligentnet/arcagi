@@ -576,6 +576,16 @@ eprintln!("here");
     pub fn in_dimensions(&self) -> (usize, usize) {
         self.input.grid.dimensions()
     }
+
+    pub fn shape_pixels_to_colour(&self) -> BTreeMap<usize, Colour> {
+        let mut spc: BTreeMap<usize, Colour> = BTreeMap::new();
+
+        for s in self.output.shapes.shapes.iter() {
+            spc.insert(s.pixels(), s.colour);
+        }
+
+        spc
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1016,6 +1026,16 @@ impl Examples {
         }
 
         in_grid.derive_missing_rule(&out_grid)
+    }
+
+    pub fn shape_pixels_to_colour(&self) -> BTreeMap<usize, Colour> {
+        let mut spc: BTreeMap<usize, Colour> = BTreeMap::new();
+
+        for ex in self.examples.iter() {
+            spc.extend(ex.shape_pixels_to_colour());
+        }
+
+        spc
     }
 }
 

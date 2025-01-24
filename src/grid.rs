@@ -27,11 +27,11 @@ impl Grid {
     }
 
     pub fn trivial() -> Self {
-        Grid::new(0, 0, Black)
+        Self::new(0, 0, Black)
     }
 
     pub fn dummy() -> Self {
-        Grid::new(2, 2, Black)
+        Self::new(2, 2, Black)
     }
 
     pub fn is_trivial(&self) -> bool {
@@ -112,7 +112,7 @@ impl Grid {
         let cols = self.cells.columns;
 
         if rows != cols {
-            return Grid::trivial();
+            return Self::trivial();
         }
 
         let mut g = Self::new(rows * rows, cols * cols, Black);
@@ -165,7 +165,7 @@ impl Grid {
     }
 
     // TODO crap improve
-    pub fn stretch_down(&self) -> Grid {
+    pub fn stretch_down(&self) -> Self {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
         for y in 0 .. self.cells.columns {
@@ -190,7 +190,7 @@ impl Grid {
             }
         }
 
-        Grid::new_from_matrix(&m)
+        Self::new_from_matrix(&m)
     }
 
     pub fn is_diag_origin(&self) -> bool {
@@ -212,18 +212,22 @@ impl Grid {
     }
 
     /*
-    pub fn stretch_up(&self) -> Grid {
+    pub fn stretch_up(&self) -> Self {
         self.mirrored_x().stretch_up().mirrored_x()
     }
     */
 
-    pub fn gravity_down(&self) -> Grid {
-        let mut values: Vec<Colour> = vec![Black;self.cells.columns];
-        let mut counts: Vec<usize> = vec![0;self.cells.columns];
+    pub fn gravity_down(&self) -> Self {
+        self.gravity_down_colour(Black)
+    }
+
+    pub fn gravity_down_colour(&self, colour: Colour) -> Self {
+        let mut values: Vec<Colour> = vec![colour; self.cells.columns];
+        let mut counts: Vec<usize> = vec![0; self.cells.columns];
 
         for ((r, c), cell) in self.cells.items() {
-            if self.cells[(r,c)].colour != Black {
-                if values[c] == Black {
+            if self.cells[(r,c)].colour != colour {
+                if values[c] == colour {
                     values[c] = cell.colour;
                 }
 
@@ -234,22 +238,30 @@ impl Grid {
         let mut m = self.cells.clone();
 
         for (r, c) in self.cells.keys() {
-            if self.cells[(r,c)].colour == Black {
+            if self.cells[(r,c)].colour == colour {
                m[(r,c)].colour = values[c];
             }
             if self.cells.rows - r > counts[c] {
-               m[(r,c)].colour = Black;
+               m[(r,c)].colour = colour;
             }
         }
 
-        Grid::new_from_matrix(&m)
+        Self::new_from_matrix(&m)
     }
 
-    pub fn gravity_up(&self) -> Grid {
+    pub fn gravity_up(&self) -> Self {
         self.mirrored_rows().gravity_down().mirrored_rows()
     }
 
-    pub fn move_down(&self) -> Grid {
+    pub fn gravity_right(&self) -> Self {
+        self.rot_rect_90().gravity_down().rot_rect_270()
+    }
+
+    pub fn gravity_left(&self) -> Self {
+        self.rot_rect_270().gravity_down().rot_rect_90()
+    }
+
+    pub fn move_down(&self) -> Self {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
         for r in 1 .. self.cells.rows {
@@ -260,7 +272,7 @@ impl Grid {
             }
         }
 
-        Grid::new_from_matrix(&m)
+        Self::new_from_matrix(&m)
     }
 
     /*
@@ -269,7 +281,7 @@ impl Grid {
      * stretch_up
      */
 
-    pub fn move_up(&self) -> Grid {
+    pub fn move_up(&self) -> Self {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
         for r in 1 .. self.cells.rows {
@@ -280,10 +292,10 @@ impl Grid {
             }
         }
 
-        Grid::new_from_matrix(&m)
+        Self::new_from_matrix(&m)
     }
 
-    pub fn move_right(&self) -> Grid {
+    pub fn move_right(&self) -> Self {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
         for r in 0 .. self.cells.rows {
@@ -294,10 +306,10 @@ impl Grid {
             }
         }
 
-        Grid::new_from_matrix(&m)
+        Self::new_from_matrix(&m)
     }
 
-    pub fn move_left(&self) -> Grid {
+    pub fn move_left(&self) -> Self {
         let mut m = Matrix::new(self.cells.rows, self.cells.columns, Cell::new(0, 0, 0));
 
         for r in 0 .. self.cells.rows {
@@ -308,7 +320,7 @@ impl Grid {
             }
         }
 
-        Grid::new_from_matrix(&m)
+        Self::new_from_matrix(&m)
     }
 
     pub fn trim(&self, r: usize, c: usize) -> Self {
@@ -316,7 +328,7 @@ impl Grid {
             return self.clone();
         }
 
-        let mut grid = Grid::new(r, c, Black);
+        let mut grid = Self::new(r, c, Black);
 
         for ((r, c), cell) in self.cells.items() {
             if r < grid.cells.rows && c < grid.cells.columns {
@@ -605,7 +617,7 @@ impl Grid {
     }
 
     pub fn extend_border(&self) -> Self {
-        let mut grid = Grid::new(self.cells.rows + 2, self.cells.columns + 2, Black);
+        let mut grid = Self::new(self.cells.rows + 2, self.cells.columns + 2, Black);
 
         for ((r, c), cell) in self.cells.items() {
             grid.cells[(r + 1,c + 1)].row = r + 1;
@@ -649,9 +661,9 @@ impl Grid {
         let rows = self.cells.rows;
         let cols = self.cells.columns;
         let mut grid = if lr {
-            Grid::new(rows, cols * amount, Black)
+            Self::new(rows, cols * amount, Black)
         } else {
-            Grid::new(rows * amount, cols, Black)
+            Self::new(rows * amount, cols, Black)
         };
 
         for ((r, c), cell) in self.cells.items() {
@@ -670,9 +682,9 @@ impl Grid {
         let rows = self.cells.rows;
         let cols = self.cells.columns;
         let mut grid = if lr {
-            Grid::new(rows, cols + amount, Black)
+            Self::new(rows, cols + amount, Black)
         } else {
-            Grid::new(rows + amount, cols, Black)
+            Self::new(rows + amount, cols, Black)
         };
 
         for ((r, c), cell) in self.cells.items() {
@@ -952,7 +964,7 @@ impl Grid {
     }
 
     pub fn copy_centre(&mut self, cr: usize, cc: usize, other: &Self) {
-        if other == &Grid::trivial() {
+        if other == &Self::trivial() {
             return;
         }
         let centre_r = (other.cells.rows / 2) as isize;
@@ -1166,11 +1178,11 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         (rs, cs)
     }
 
-    pub fn colour_every_nxn_for_m(colour: Colour, side: usize, n: usize, m: usize) -> Grid {
+    pub fn colour_every_nxn_for_m(colour: Colour, side: usize, n: usize, m: usize) -> Self {
         if m == 0 || n == 0 {
-            return Grid::trivial();
+            return Self::trivial();
         }
-        let mut grid = Grid::new(side, side, Black);
+        let mut grid = Self::new(side, side, Black);
         let mut count = 0;
 
         'outer:
@@ -1237,6 +1249,19 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
     pub fn flood_fill_mut(&mut self, r: usize, c: usize, ignore_colour: Colour, new_colour: Colour) {
         self.flood_fill_bg_mut(r, c, ignore_colour, Black, new_colour)
+    }
+
+    pub fn flood_fill_border_mut(&mut self, ignore_colour: Colour, new_colour: Colour) {
+        let rows = self.cells.rows;
+        let cols = self.cells.columns;
+
+        for r in 0 .. rows {
+            for c in 0 .. cols {
+                if (r == 0 || c == 0 || r == rows - 1 || c == cols - 1) && self.cells[(r, c)].colour == Black {
+                    self.flood_fill_mut(r, c, ignore_colour, new_colour);
+                }
+            }
+        }
     }
 
     pub fn flood_fill_bg_mut(&mut self, r: usize, c: usize, ignore_colour: Colour, bg: Colour, new_colour: Colour) {
@@ -1537,7 +1562,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
     */
 
     pub fn rotated_90(&self, times: usize) -> Self {
-        if self.cells.rows != self.cells.columns {
+        if self.cells.rows != self.cells.columns || times == 0 {
             return self.clone();
         }
 
@@ -1602,12 +1627,12 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         if self.cells.rows == self.cells.columns {
             self.rotated_90(1)
         } else {
-            let mut rot = Grid::new(self.cells.columns, self.cells.rows, Black);
+            let mut rot = Self::new(self.cells.columns, self.cells.rows, Black);
             let n = self.cells.rows;
             
             for ((r, c), cell) in self.cells.items() {
-                rot.cells[(c, n - r - 1)].row = r;
-                rot.cells[(c, n - r - 1)].col = c;
+                //rot.cells[(c, n - r - 1)].row = r;
+                //rot.cells[(c, n - r - 1)].col = c;
                 rot.cells[(c, n - r - 1)].colour = cell.colour;
             }
 
@@ -1768,7 +1793,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
     fn show_any(&self, diff: bool, io: bool) {
         println!("--------Grid--------");
-        Grid::show_matrix(&self.cells, diff, io);
+        Self::show_matrix(&self.cells, diff, io);
         println!();
     }
 
@@ -1897,7 +1922,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         shapes
     }
 
-    pub fn fill_template(&self, filler: &Shape) -> Grid {
+    pub fn fill_template(&self, filler: &Shape) -> Self {
         let mut shapes = Shapes::new_sized(self.height() * filler.height(), self.width() * filler.width());
 
         let rr = filler.height();
@@ -2005,7 +2030,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         (0, 0)
     }
 
-    pub fn find_colour_patches(&self, colour: Colour) -> Shapes {
+    fn find_colour_patches_core(&self, colour: Colour) -> Shapes {
         fn mshape(cells: &mut Matrix<Cell>, colour: Colour) -> Option<(usize, usize, Matrix<Cell>)> {
             // Find starting position
             let rc = cells.items().filter(|(_, cell)| cell.colour == colour).map(|(pos, _)| pos).min();
@@ -2030,6 +2055,7 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
 
                         cell.row = r;
                         cell.col = c;
+                        cell.colour = colour;
                     }
                 }
 
@@ -2064,7 +2090,19 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         if self.cells.rows < limit && self.cells.columns < limit {
             return Shapes::new_sized(0, 0);
         }
-        self.find_colour_patches(Black)
+        self.find_colour_patches_core(Black)
+    }
+
+    pub fn find_colour_patches(&self, colour: Colour) -> Shapes {
+        // patches tend to be smaller
+        self.find_colour_patches_limit(colour, 2)
+    }
+
+    pub fn find_colour_patches_limit(&self, colour: Colour, limit: usize) -> Shapes {
+        if self.cells.rows < limit && self.cells.columns < limit {
+            return Shapes::new_sized(0, 0);
+        }
+        self.find_colour_patches_core(colour)
     }
 
     fn find_gaps(&self, bg: Colour) -> (Vec<usize>, Vec<usize>) {
@@ -2436,6 +2474,72 @@ println!("BG not Black {:?}", s.colour);
         shapes
     }
 
+    pub fn repeat_rows(&self, start: usize, colour: Colour) -> Vec<usize> {
+println!("{:?}", self.dimensions());
+        let mut res: Vec<usize> = vec![start];
+        let row: Vec<Colour> = (0 .. self.cells.rows)
+            .map(|r| self.cells[(r,start)].colour)
+            .collect();
+
+        for c in start + 1 .. self.cells.columns {
+            for r in 0 .. self.cells.rows {
+                let lcol = self.cells[(r,c)].colour;
+
+                if row[r] != lcol && lcol != colour {
+                    break;
+                }
+                if r == self.cells.rows - 1 {
+                    res.push(c);
+                }
+            }
+        }
+
+        res
+    }
+
+    pub fn cover_rows(&self, start: usize, colour: Colour) -> Self {
+        let reps = self.repeat_rows(start, colour);
+        let mut grid = self.clone();
+
+        for rc in 1 .. reps.len() - 1 {
+            for c in 0 .. self.cells.columns {
+                let r = reps[rc];
+println!("{r}");
+                let r1 = reps[rc + 1];
+                let curr = &mut grid.cells[(r,c)];
+                let curr1 = &self.cells[(r1,c)];
+
+                if curr.colour == colour && curr1.colour != colour {
+                    curr.colour = curr1.colour;
+                }
+            }
+        }
+
+        grid
+    }
+
+    pub fn repeat_cols(&self, start: usize, colour: Colour) -> Vec<usize> {
+        let mut res: Vec<usize> = vec![start];
+        let col: Vec<Colour> = (0 .. self.cells.columns)
+            .map(|c| self.cells[(start,c)].colour)
+            .collect();
+
+        for r in start + 1 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                let lcol = self.cells[(r,c)].colour;
+
+                if col[c] != lcol && lcol != colour {
+                    break;
+                }
+                if c == self.cells.columns - 1 {
+                    res.push(r);
+                }
+            }
+        }
+
+        res
+    }
+
     pub fn is_square(&self) -> bool {
         self.cells.rows > 1 && self.cells.rows == self.cells.columns
     }
@@ -2594,28 +2698,31 @@ println!("BG not Black {:?}", s.colour);
     }
 
     pub fn has_gravity(&self, orientation: usize) -> bool {
+        self.has_gravity_colour(orientation, Black)
+    }
+
+    pub fn has_gravity_colour(&self, orientation: usize, colour: Colour) -> bool {
         // Must be same shape
         if self.cells.rows != self.cells.columns {
             return false;
         }
 
         let mut grid = self.clone();
+        let mut has_colour = false;
 
         grid = grid.rotate_90(orientation);
-
-        let mut has_black = false;
 
         for r in 0 .. grid.cells.rows {
             let mut prev = grid.cells[(r, 0)].colour;
 
-            if !has_black {
-                has_black = prev == Black;
+            if !has_colour {
+                has_colour = prev == colour;
             }
 
             for c in 1 .. grid.cells.columns {
                 let next = grid.cells[(r, c)].colour;
 
-                if prev != next && next == Black {
+                if prev != next && next == colour {
                     return false;
                 }
 
@@ -2623,7 +2730,7 @@ println!("BG not Black {:?}", s.colour);
             }
         }
 
-        has_black
+        has_colour
     }
 
     pub fn has_gravity_down(&self) -> bool {
@@ -2656,7 +2763,7 @@ println!("BG not Black {:?}", s.colour);
         Same
     }
 
-    pub fn bleach(&self) -> Grid {
+    pub fn bleach(&self) -> Self {
         let mut shape = self.clone();
 
         if self.size() == 0 {
@@ -3017,6 +3124,87 @@ println!("BG not Black {:?}", s.colour);
 
     pub fn centre_of(&self) -> (usize, usize) {
         (self.cells.rows / 2, self.cells.columns / 2)
+    }
+
+    /* Not needed
+    pub fn centre_of_symmetry(&self, size: usize, rs: usize, cs: usize) -> (usize, usize) {
+        let (r, c) = self.centre_of();
+
+        let g = self.subgrid(r - size + rs, 2 * size, c - size + cs, 2 * size);
+g.show();
+
+        (r, c)
+    }
+    */
+
+    pub fn row_skew(&self) -> isize {
+        fn same(cells1: &Matrix<Cell>, cells2: &Matrix<Cell>, offset: usize) -> bool {
+            for (c1, c2) in (offset .. cells1.rows).zip(0 .. cells2.rows) {
+                if cells1[(c1,0)].colour != cells2[(cells2.rows - 1 - c2,0)].colour {
+                    return false;
+                }
+            }
+
+            true
+        }
+
+        if self.cells.rows != self.cells.columns || self.cells.rows < 12 {
+            return 0;
+        }
+        let rows = self.cells.rows;
+        let dim = 6;
+
+        let top = self.subgrid(0, dim, 0, 1);
+        let bot = self.subgrid(rows - dim, dim, 0, 1);
+
+        for i in 0 .. 3 {
+            if same(&top.cells, &bot.cells, i) {
+                return i as isize;
+            }
+        }
+
+        for i in 0 .. 3 {
+            if same(&bot.cells, &top.cells, i) {
+                return -(i as isize);
+            }
+        }
+
+        0
+    }
+
+    pub fn col_skew(&self) -> isize {
+        fn same(cells1: &Matrix<Cell>, cells2: &Matrix<Cell>, offset: usize) -> bool {
+            for (c1, c2) in (offset .. cells1.columns).zip(0 .. cells2.columns) {
+                if cells1[(0,c1)].colour != cells2[(0,cells2.columns - 1 - c2)].colour {
+                    return false;
+                }
+            }
+
+            true
+        }
+
+        if self.cells.rows != self.cells.columns || self.cells.rows < 12 {
+            return 0;
+        }
+        let rows = self.cells.rows;
+        let dim = 6;
+
+        let left = self.subgrid(0, 1, 0, dim);
+        let right = self.subgrid(0, 1, rows - dim, dim);
+
+        for i in 0 .. 3 {
+            if same(&left.cells, &right.cells, i) {
+                return i as isize;
+            }
+        }
+
+        for i in 0 .. 3 {
+            if same(&right.cells, &left.cells, i) {
+                return -(i as isize);
+            }
+        }
+
+        0
     }
 
     pub fn count_diff(&self) -> (usize, usize) {

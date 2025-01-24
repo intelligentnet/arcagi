@@ -231,6 +231,10 @@ impl Colour {
         self == Self::Same || self < Self::NoColour
     }
 
+    pub fn in_range(c: usize) -> bool {
+         c < 60 || c >= 90 && c <= 94
+    }
+
     pub fn colours() -> Vec<Self> {
         (1..=9).map(Self::from_usize).collect()
     }
