@@ -423,7 +423,7 @@ eprintln!("here");
         if input.shapes.shapes.len() == output.shapes.shapes.len() {
             cats.insert(InOutShapeCount);
         }
-        if input.shapes.coloured_shapes.len() == output.coloured_shapes.shapes.len() {
+        if input.coloured_shapes.shapes.len() == output.coloured_shapes.shapes.len() {
             cats.insert(InOutShapeCountColoured);
         }
         if !input.black.shapes.is_empty() {
@@ -573,6 +573,41 @@ eprintln!("here");
         }
     }
 
+    pub fn colour_shape_map(&self, out: bool) -> BTreeMap<Colour, Shape> {
+        let mut bt: BTreeMap<Colour, Shape> = BTreeMap::new();
+        let io = if out {
+            &self.output.shapes.shapes
+        } else {
+            &self.input.shapes.shapes
+        };
+
+        for s in io.iter() {
+            bt.insert(s.colour, s.clone());
+        }
+
+        bt
+    }
+
+    pub fn colour_attachment_map(&self, out: bool) -> BTreeMap<Colour, bool> {
+        let mut bt: BTreeMap<Colour, bool> = BTreeMap::new();
+        let io = if out {
+            &self.output.shapes.shapes
+        } else {
+            &self.input.shapes.shapes
+        };
+
+        let mut prev = &Shape::trivial();
+
+        for s in io.iter() {
+            if *prev != Shape::trivial() {
+                bt.insert(s.colour, s.ocol == prev.ocol || s.cells.columns == 1);
+            }
+            prev = &s;
+        }
+
+        bt
+    }
+
     pub fn in_dimensions(&self) -> (usize, usize) {
         self.input.grid.dimensions()
     }
@@ -585,6 +620,106 @@ eprintln!("here");
         }
 
         spc
+    }
+
+    pub fn some(&self, isout: bool, f: &dyn Fn(&Shapes) -> Shape) -> Shape {
+        let s = if isout {
+            &self.output.shapes
+        } else {
+            &self.input.shapes
+        };
+
+        f(&s)
+    }
+
+    pub fn all(&self, isout: bool) -> Vec<Shape> {
+        let s = if isout {
+            &self.output.shapes
+        } else {
+            &self.input.shapes
+        };
+
+        s.shapes.clone()
+    }
+
+    pub fn some_coloured(&self, isout: bool, f: &dyn Fn(&Shapes) -> Shape) -> Shape {
+        let s = if isout {
+            &self.output.coloured_shapes
+        } else {
+            &self.input.coloured_shapes
+        };
+
+        f(&s)
+    }
+
+    pub fn all_coloured(&self, isout: bool) -> Vec<Shape> {
+        let s = if isout {
+            &self.output.coloured_shapes
+        } else {
+            &self.input.coloured_shapes
+        };
+
+        s.shapes.clone()
+    }
+
+    pub fn colour_cnt_diff(&self, inc: bool) -> Colour {
+        let incc = self.input.grid.cell_colour_cnt_map();
+        let outcc = self.output.grid.cell_colour_cnt_map();
+
+        if incc.len() != outcc.len() {
+            return NoColour;
+        }
+
+        for ((icol, icnt), (ocol, ocnt)) in incc.iter().zip(outcc.iter()) {
+            if icol != ocol {
+                return NoColour;
+            }
+            if inc && icnt < ocnt || !inc && icnt > ocnt {
+                return *icol;
+            }
+        }
+
+        NoColour
+    }
+
+    pub fn colour_cnt_inc(&self) -> Colour {
+        self.colour_cnt_diff(true)
+    }
+
+    pub fn colour_cnt_dec(&self) -> Colour {
+        self.colour_cnt_diff(false)
+    }
+
+    pub fn split_n_map_horizontal(&self, n: usize) -> HashMap<Grid, Grid> {
+        let ins: Vec<Grid> = self.input.grid.split_n_horizontal(n);
+        let outs: Vec<Grid> = self.output.grid.split_n_horizontal(n);
+        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+
+        if ins.len() != outs.len() {
+            return bt;
+        }
+
+        for (is, os) in ins.iter().zip(outs.iter()) {
+            bt.insert(is.to_origin(), os.to_origin());
+        }
+
+        bt
+    }
+
+    pub fn split_n_map_vertical(&self, n: usize) -> HashMap<Grid, Grid> {
+        let ins: Vec<Grid> = self.input.grid.split_n_vertical(n);
+        let outs: Vec<Grid> = self.output.grid.split_n_vertical(n);
+        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+
+        if ins.len() != outs.len() {
+            return bt;
+        }
+
+        for (is, os) in ins.iter().zip(outs.iter()) {
+            bt.insert(is.to_origin(), os.to_origin());
+        }
+
+        bt
     }
 }
 
@@ -776,6 +911,54 @@ impl Examples {
 
     pub fn all_shapes_out_sq(&self) -> Shapes {
         self.all_shapes(false, true)
+    }
+
+    pub fn some(&self, isout: bool, f: &dyn Fn(&Shapes) -> Shape) -> Vec<Shape> {
+        let mut s: Vec::<Shape> = Vec::new();
+
+        for ex in self.examples.iter() {
+            s.push(ex.some(isout, f));
+        }
+
+        s
+    }
+
+    pub fn all(&self, isout: bool) -> Vec<Shape> {
+        let mut s: Vec::<Shape> = Vec::new();
+
+        for ex in self.examples.iter() {
+            let vs = ex.all(isout);
+
+            for ex2 in vs.iter() {
+                s.push(ex2.clone());
+            }
+        }
+
+        s
+    }
+
+    pub fn some_coloured(&self, isout: bool, f: &dyn Fn(&Shapes) -> Shape) -> Vec<Shape> {
+        let mut s: Vec::<Shape> = Vec::new();
+
+        for ex in self.examples.iter() {
+            s.push(ex.some_coloured(isout, f));
+        }
+
+        s
+    }
+
+    pub fn all_coloured(&self, isout: bool) -> Vec<Shape> {
+        let mut s: Vec::<Shape> = Vec::new();
+
+        for ex in self.examples.iter() {
+            let vs = ex.all_coloured(isout);
+
+            for ex2 in vs.iter() {
+                s.push(ex2.clone());
+            }
+        }
+
+        s
     }
 
     pub fn categorise_grids(examples: &mut [Example]) -> BTreeSet<GridCategory> {
@@ -1037,5 +1220,90 @@ impl Examples {
 
         spc
     }
-}
 
+    pub fn colour_shape_map(&self, out: bool) -> BTreeMap<Colour, Shape> {
+        let mut bt: BTreeMap<Colour, Shape> = BTreeMap::new();
+
+        for ex in self.examples.iter() {
+            bt.extend(ex.colour_shape_map(out));
+        }
+
+        bt
+    }
+
+    pub fn colour_attachment_map(&self, out: bool) -> BTreeMap<Colour, bool> {
+        let mut bt: BTreeMap<Colour, bool> = BTreeMap::new();
+
+        for ex in self.examples.iter() {
+            bt.extend(ex.colour_attachment_map(out));
+        }
+
+        bt
+    }
+
+    pub fn colour_cnt_diff(&self, inc: bool) -> Colour {
+        let mut colour = NoColour;
+
+        for ex in self.examples.iter() {
+            let new_col = ex.colour_cnt_diff(inc);
+
+            if colour == NoColour {
+                colour = new_col;
+            } else if colour != new_col {
+                return NoColour;
+            }
+        }
+
+        colour
+    }
+
+    pub fn colour_cnt_inc(&self) -> Colour {
+        self.colour_cnt_diff(true)
+    }
+
+    pub fn colour_cnt_dec(&self) -> Colour {
+        self.colour_cnt_diff(false)
+    }
+
+    pub fn colour_diffs(&self, inc: bool) -> Vec<Colour> {
+        let mut cc: Vec<Colour> = Vec::new();
+
+        for ex in self.examples.iter() {
+            let new_col = ex.colour_cnt_diff(inc);
+
+            if new_col != NoColour {
+                cc.push(new_col);
+            }
+        }
+
+        cc
+    }
+
+    pub fn colour_incs(&self) -> Vec<Colour> {
+        self.colour_diffs(true)
+    }
+
+    pub fn colour_decs(&self) -> Vec<Colour> {
+        self.colour_diffs(false)
+    }
+
+    pub fn split_n_map_horizontal(&self, n: usize) -> HashMap<Grid, Grid> {
+        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+
+        for ex in self.examples.iter() {
+            bt.extend(ex.split_n_map_horizontal(n));
+        }
+
+        bt
+    }
+
+    pub fn split_n_map_vertical(&self, n: usize) -> HashMap<Grid, Grid> {
+        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+
+        for ex in self.examples.iter() {
+            bt.extend(ex.split_n_map_vertical(n));
+        }
+
+        bt
+    }
+}

@@ -67,9 +67,9 @@ pub enum Colour {
     OrigBrown = 59,
     NoColour = 90,
     Mixed = 91,
-    Transparent = 92,
-    DiffShape = 93,    // Naughty overlading of enum
-    Same = 94,         // Naughty overlading of enum
+    Transparent = 92,   // Naughty overlading of enum
+    DiffShape = 93,     // Naughty overlading of enum
+    Same = 94,          // Naughty overlading of enum
 }
 
 impl Colour {
@@ -142,8 +142,8 @@ impl Colour {
             90 => Self::NoColour,
             91 => Self::Mixed,
             92 => Self::Transparent,
-            93 => Self::DiffShape,    // Naughty overlading of enum
-            94 => Self::Same,         // Naughty overlading of enum
+            93 => Self::DiffShape,    // Naughty overlaying of enum
+            94 => Self::Same,         // Naughty overlaying of enum
             _ => todo!()
         }
     }
@@ -212,9 +212,9 @@ impl Colour {
             Self::OrigBrown => 59,
             Self::NoColour => 90,
             Self::Mixed => 91,
-            Self::Transparent => 92,    // Naughty overlading of enum
-            Self::DiffShape => 93,    // Naughty overlading of enum
-            Self::Same => 94,         // Naughty overlading of enum
+            Self::Transparent => 92,    // Naughty overlaying of enum
+            Self::DiffShape => 93,    // Naughty overlaying of enum
+            Self::Same => 94,         // Naughty overlaying of enum
             //_ => todo!()
         }
     }
@@ -341,7 +341,7 @@ impl Sub for Colour {
 }
 
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GridCategory {
     HasArms,
     BareCornersIn,
