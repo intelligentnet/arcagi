@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet}; // Don't use Hash, need ordering
 use array_tool::vec::{Uniq, Union};
 use crate::cats::*;
 use crate::cats::Colour::*;
@@ -144,27 +144,29 @@ impl Example {
                 cats.insert(InOutSquareSameSizeOdd);
             }
 
-            if input.grid.rotated_90(1).to_json() == output.grid.to_json() {
+            let output_grid_json = output.grid.to_json();
+
+            if input.grid.rotated_90(1).to_json() == output_grid_json {
                 cats.insert(Rot90);
             }
-            if input.grid.rotated_90(2).to_json() == output.grid.to_json() {
+            if input.grid.rotated_90(2).to_json() == output_grid_json {
                 cats.insert(Rot180);
             }
-            if input.grid.rotated_270(1).to_json() == output.grid.to_json() {
+            if input.grid.rotated_270(1).to_json() == output_grid_json {
                 cats.insert(Rot270);
             }
-            if input.grid.transposed().to_json() == output.grid.to_json() {
+            if input.grid.transposed().to_json() == output_grid_json {
                 cats.insert(Transpose);
             }
             /* There are none?
-            if input.grid.inv_transposed().to_json() == output.grid.to_json() {
+            if input.grid.inv_transposed().to_json() == output_grid_json {
                 cats.insert(InvTranspose);
             }
             */
-            if input.grid.mirrored_rows().to_json() == output.grid.to_json() {
+            if input.grid.mirrored_rows().to_json() == output_grid_json {
                 cats.insert(MirroredR);
             }
-            if input.grid.mirrored_cols().to_json() == output.grid.to_json() {
+            if input.grid.mirrored_cols().to_json() == output_grid_json {
                 cats.insert(MirroredC);
             }
         } else {
@@ -498,6 +500,12 @@ eprintln!("here");
         if output.shapes.len() == 1 && output.shapes.shapes[0].is_line() {
             cats.insert(OutLine);
         }
+        if input.shapes.len() == input.coloured_shapes.len() {
+            cats.insert(NoNetColouredShapesIn);
+        }
+        if output.shapes.len() == output.coloured_shapes.len() {
+            cats.insert(NoNetColouredShapesOut);
+        }
         cats.insert(NoShapesIn(input.shapes.len()));
         cats.insert(NoShapesOut(output.shapes.len()));
         if input.shapes.is_square_same() {
@@ -608,10 +616,6 @@ eprintln!("here");
         bt
     }
 
-    pub fn in_dimensions(&self) -> (usize, usize) {
-        self.input.grid.dimensions()
-    }
-
     pub fn shape_pixels_to_colour(&self) -> BTreeMap<usize, Colour> {
         let mut spc: BTreeMap<usize, Colour> = BTreeMap::new();
 
@@ -690,10 +694,10 @@ eprintln!("here");
         self.colour_cnt_diff(false)
     }
 
-    pub fn split_n_map_horizontal(&self, n: usize) -> HashMap<Grid, Grid> {
+    pub fn split_n_map_horizontal(&self, n: usize) -> BTreeMap<Grid, Grid> {
         let ins: Vec<Grid> = self.input.grid.split_n_horizontal(n);
         let outs: Vec<Grid> = self.output.grid.split_n_horizontal(n);
-        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+        let mut bt: BTreeMap<Grid, Grid> = BTreeMap::new();
 
         if ins.len() != outs.len() {
             return bt;
@@ -706,10 +710,10 @@ eprintln!("here");
         bt
     }
 
-    pub fn split_n_map_vertical(&self, n: usize) -> HashMap<Grid, Grid> {
+    pub fn split_n_map_vertical(&self, n: usize) -> BTreeMap<Grid, Grid> {
         let ins: Vec<Grid> = self.input.grid.split_n_vertical(n);
         let outs: Vec<Grid> = self.output.grid.split_n_vertical(n);
-        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+        let mut bt: BTreeMap<Grid, Grid> = BTreeMap::new();
 
         if ins.len() != outs.len() {
             return bt;
@@ -720,6 +724,24 @@ eprintln!("here");
         }
 
         bt
+    }
+
+    pub fn majority_dimensions(&self) -> (usize, usize){
+        if self.input.shapes.shapes.is_empty() {
+            return (0, 0);
+        }
+
+        let mut sc: BTreeMap<(usize, usize), usize> = BTreeMap::new();
+
+        for s in self.input.shapes.shapes.iter() {
+            *sc.entry(s.dimensions()).or_insert(0) += 1;
+        }
+
+        if let Some((_, dim)) = sc.iter().map(|(k, v)| (v, k)).max() {
+            *dim
+        } else {
+            (0, 0)
+        }
     }
 }
 
@@ -1167,8 +1189,8 @@ impl Examples {
         colour
     }
 
-    pub fn bleached_io_map(&self) -> HashMap<String, Grid> {
-        let mut h: HashMap<String, Grid> = HashMap::new();
+    pub fn bleached_io_map(&self) -> BTreeMap<String, Grid> {
+        let mut h: BTreeMap<String, Grid> = BTreeMap::new();
 
         for ex in self.examples.iter() {
             h.insert(ex.input.grid.bleach().to_json(), ex.output.grid.clone());
@@ -1182,7 +1204,7 @@ impl Examples {
         let mut cs = 0;
 
         for ex in self.examples.iter() {
-            let (r, c) = ex.in_dimensions();
+            let (r, c) = ex.input.grid.dimensions();
 
             (rs, cs) = (rs, cs).max((r, c));
         }
@@ -1287,8 +1309,8 @@ impl Examples {
         self.colour_diffs(false)
     }
 
-    pub fn split_n_map_horizontal(&self, n: usize) -> HashMap<Grid, Grid> {
-        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+    pub fn split_n_map_horizontal(&self, n: usize) -> BTreeMap<Grid, Grid> {
+        let mut bt: BTreeMap<Grid, Grid> = BTreeMap::new();
 
         for ex in self.examples.iter() {
             bt.extend(ex.split_n_map_horizontal(n));
@@ -1297,8 +1319,8 @@ impl Examples {
         bt
     }
 
-    pub fn split_n_map_vertical(&self, n: usize) -> HashMap<Grid, Grid> {
-        let mut bt: HashMap<Grid, Grid> = HashMap::new();
+    pub fn split_n_map_vertical(&self, n: usize) -> BTreeMap<Grid, Grid> {
+        let mut bt: BTreeMap<Grid, Grid> = BTreeMap::new();
 
         for ex in self.examples.iter() {
             bt.extend(ex.split_n_map_vertical(n));

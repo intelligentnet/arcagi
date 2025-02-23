@@ -137,19 +137,6 @@ fn pass(all: bool, task: &str, experiment: &str, examples: &Examples, trans: Tra
     let colour_diffs = examples.io_colour_diff();
     let all_colour_diffs = examples.io_all_colour_diff();
     let colour_common = examples.io_colour_common();
-{
-        // testing function
-        let func = |ex: &Example| {
-            if colour_diffs.len() != 1 {
-                return Grid::trivial();
-            }
-ex.input.shapes.show();
-
-            Grid::trivial()
-        };
-
-        if let Some(rule) = run_experiment(task, 10000, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
-}
 
     let gc = BlankIn;
     if all || cat.contains(&gc) { // 2 done
@@ -866,6 +853,11 @@ ex.input.shapes.show();
 
             let mut new_shapes = Shapes::new_sized(ex.input.grid.cells.rows, div.ocol);
             let mut r = 1;
+
+            if start.ocol <= div.ocol {
+                return Grid::trivial();
+            }
+
             let mut c = start.ocol - div.ocol - 1;
 
             start.to_position_mut(0, c);
@@ -881,6 +873,10 @@ ex.input.shapes.show();
                                 ns = os.to_position(r, c);
                                 c += os.cells.columns - 1;
                             } else {
+                                if c < os.cells.columns - 1 {
+                                    return Grid::trivial();
+                                }
+
                                 c -= os.cells.columns - 1;
                                 ns = os.to_position(r, c);
                             };
@@ -1083,6 +1079,282 @@ ex.input.shapes.show();
 
         if let Some(rule) = run_experiment(task, 684, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
+        let func = |ex: &Example| {
+            if !colour_diffs.is_empty() {
+                return Grid::trivial();
+            }
+
+            let ccm = ex.input.shapes.shape_colour_cnt_map();
+
+            let mut grid = Grid::new(ex.input.grid.cells.rows, ex.input.grid.cells.columns, Black);
+
+            let mut box_tlr = 0;
+            let mut box_tlc = 0;
+
+            for (col, sv) in ccm.iter() {
+                if sv.len() == 1 {
+                    box_tlr = sv[0].orow;
+                    box_tlc = sv[0].ocol;
+                    let box_brr = box_tlr + sv[0].cells.rows;
+                    let box_brc = box_tlc + sv[0].cells.columns;
+
+                    grid.fill_patch_coord_mut(box_tlr, box_tlc, box_brr - box_tlr, box_brc - box_tlc, *col);
+                }
+            }
+
+            for (col, sv) in ccm.iter() {
+                if sv.len() > 1 {
+                    let (mut tlr, mut tlc, brr, brc) = Shapes::new_shapes(&sv).corners();
+                    
+                    let rlen = brr - tlr - 1;
+                    let clen = brc - tlc - 1;
+
+                    tlr = tlr.max(box_tlr);
+                    tlc = tlc.max(box_tlc);
+
+                    if grid.cells.rows < tlr + rlen || grid.cells.columns < tlc + clen {
+                        return Grid::trivial();
+                    }
+
+                    grid.fill_patch_coord_mut(tlr, tlc, rlen, clen, *col);
+                }
+            }
+//grid.show();
+
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 685, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.len() < 5 {
+                return Grid::trivial();
+            }
+
+            let mut shapes = ex.input.shapes.clone();
+            let idx = &ex.input.shapes.shapes[0];
+            let mut colour = NoColour;
+
+            for s in ex.input.shapes.shapes.iter() {
+                if s.size() == 1 && s.orow < idx.cells.rows && s.ocol < idx.cells.columns {
+                    colour = s.colour;
+                }
+            }
+
+            for s in shapes.shapes.iter_mut() {
+                if s.colour == colour && (s.orow >= idx.cells.rows || s.ocol >= idx.cells.columns) {
+                    s.force_recolour_mut(Black);
+                }
+            }
+
+            shapes.to_grid()
+        };
+
+        if let Some(rule) = run_experiment(task, 696, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            let colours = Uniq::uniq(&colour_common, all_colour_diffs.clone());
+            if ex.input.shapes.shapes.len() < 2 || colour_diffs.len() != 1 || colours.len() != 1 {
+                return Grid::trivial();
+            }
+
+            let (tlr, tlc, brr, brc) = ex.input.shapes.corners();
+            let mut grid = ex.input.grid.clone();
+
+            grid.draw_mut(Down, 0, tlc, colours[0]);
+            grid.draw_mut(Down, 0, brc - 1, colours[0]);
+            grid.draw_mut(Right, tlr, 0, colours[0]);
+            grid.draw_mut(Right, brr - 1, 0, colours[0]);
+
+            grid.flood_fill_mut(tlr + 1, tlc + 1, NoColour, colour_diffs[0]);
+
+//grid.show();
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 697, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        if colour_diffs.len() == 1 {
+            let mut gap = 0;
+
+            for (i, s) in examples.examples[0].output.shapes.shapes.iter().enumerate() {
+                if i == 0 && s.colour == colour_diffs[0] {
+                    continue;
+                } else if s.colour == colour_diffs[0] {
+                    gap = i;
+                    break;
+                }
+            }
+
+            let func = |ex: &Example| {
+                if ex.input.shapes.shapes.len() < 2 || gap == 0 {
+                    return Grid::trivial();
+                }
+
+                let mut shapes = ex.input.shapes.clone();
+
+                for (i, s) in shapes.shapes.iter_mut().enumerate() {
+                    if i % gap == 0 {
+                        s.force_recolour_mut(colour_diffs[0]);
+                    }
+                }
+
+//shapes.to_grid().show();
+                shapes.to_grid()
+            };
+
+            if let Some(rule) = run_experiment(task, 698, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+        }
+
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.len() < 4 {
+                return Grid::trivial();
+            }
+
+            let mut grid = ex.input.grid.clone();
+            let mut shapes: BTreeMap<Colour, Vec<&Shape>> = BTreeMap::new();
+
+            for s in ex.input.shapes.shapes.iter() {
+                if s.size() != ex.input.grid.size() {
+                    shapes.entry(s.colour).and_modify(|sv| sv.push(s)).or_insert(vec![s]);
+                }
+            }
+
+            for (_colour, shapes) in shapes.iter() {
+                let origins = Shapes::origins(shapes);
+
+                if origins.is_empty() {
+                    return Grid::trivial();
+                }
+
+                for (i, (r, c)) in origins.iter().enumerate() {
+                    if !Shapes::contains_origin(shapes, *r, *c) {
+                        let posn = if i == 0 { 3 } else { i - 1 };
+
+                        if posn >= shapes.len() {
+                            return Grid::trivial();
+                        }
+
+                        let s = if posn % 2 == 0 {
+                            shapes[posn].mirrored_c()
+                        } else {
+                            shapes[posn].mirrored_r()
+                        };
+
+                        let s = s.to_position(*r, *c);
+
+                        grid.copy_shape_to_grid_mut(&s);
+                    }
+                }
+            }
+//grid.show();
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 699, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.len() < 10 || colour_common.len() < 5 {
+                return Grid::trivial();
+            }
+
+            let mut cc: BTreeMap<Colour, usize> = BTreeMap::new();
+            let mut corners: Vec<Shape> = Vec::new();
+
+            for s in ex.input.shapes.shapes.iter() {
+                if s.size() == 4 {
+                    *cc.entry(s.colour).or_insert(0) += 1;
+                    corners.push(s.clone());
+                }
+            }
+
+            let (_, max_col) = if let Some(col) = cc.iter().map(|(&c, &n)| (n, c)).max() {
+                col
+            } else {
+                (0, NoColour)
+            };
+            let (_, min_col) = if let Some(col) = cc.iter().map(|(&c, &n)| (n, c)).min() {
+                col
+            } else {
+                (0, NoColour)
+            };
+            let (tlr, tlc, brr, brc) = Shapes::vec_corners(&corners);
+            let mut grid = ex.input.grid.clone();
+
+            if brr - tlr < 2 || brc - tlc < 2 || brr == tlr || brc == tlc || tlr == 0 || tlc == 0 || grid.cells.columns == brc || grid.cells.rows == brr {
+                return Grid::trivial();
+            }
+
+            let centre = Shape::new_sized_coloured_position(tlr, tlc, brr - tlr, brc - tlc, max_col);
+            let scentre = Shape::new_sized_coloured_position(tlr + 1, tlc + 1, brr - tlr - 2, brc - tlc - 2, min_col);
+            let left = Shape::new_sized_coloured_position(tlr, 0, brr - tlr, tlc, min_col);
+            let right = Shape::new_sized_coloured_position(tlr, brc, brr - tlr, grid.cells.columns - brc, min_col);
+            let up = Shape::new_sized_coloured_position(0, tlc, tlr, brc - tlc, min_col);
+            let down = Shape::new_sized_coloured_position(brr, tlc, grid.cells.rows - brr, brc - tlc, min_col);
+            grid.copy_shape_to_grid_mut(&centre);
+            grid.copy_shape_to_grid_mut(&scentre);
+            grid.copy_shape_to_grid_mut(&left);
+            grid.copy_shape_to_grid_mut(&right);
+            grid.copy_shape_to_grid_mut(&up);
+            grid.copy_shape_to_grid_mut(&down);
+
+            for s in ex.input.shapes.shapes.iter() {
+                if s.size() == 1 && grid.cells[(s.orow,s.ocol)].colour == min_col {
+                    //grid.copy_shape_to_grid_mut(&s);
+                    if s.orow <= tlr && (s.orow == 0 || grid.cells[(s.orow-1,s.ocol)].colour == min_col) {
+                        grid.draw_bg_mut(Up, s.orow, s.ocol, s.colour, min_col);
+                    } else if s.orow >= brr && (s.orow == grid.cells.rows - 1 || grid.cells[(s.orow+1,s.ocol)].colour == min_col) {
+                        grid.draw_bg_mut(Down, s.orow, s.ocol, s.colour, min_col);
+                    } else if s.ocol <= tlc && (s.ocol == 0 || grid.cells[(s.orow,s.ocol-1)].colour == min_col) {
+                        grid.draw_bg_mut(Left, s.orow, s.ocol, s.colour, min_col);
+                    } else if s.ocol >= brc {
+                        grid.draw_bg_mut(Right, s.orow, s.ocol, s.colour, min_col);
+                    }
+                }
+            }
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 700, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.len() < 5 || ex.input.coloured_shapes.shapes.len() != ex.input.shapes.shapes.len() {
+                return Grid::trivial();
+            }
+
+            let ccm = ex.input.shapes.shape_colour_cnt_map();
+            let r = ccm.len();
+            let c = if let Some(c) = ccm.iter().map(|(_,vs)| vs.len()).max() {
+                c
+            } else {
+                0
+            };
+
+            if c == 0 {
+                return Grid::trivial();
+            }
+
+            let mut grid = Grid::new(r, c, Black);
+            let mut i = 0;
+
+            let mut cs: Vec<(usize, Colour)> = ccm.iter().map(|(colour,vs)| (vs.len(), *colour)).collect();
+
+            cs.sort_by(|a, b| b.cmp(a));
+
+            for (len, colour) in cs.iter() {
+                for j in 0 .. *len {
+                    grid.cells[(i, c - len + j)].colour = *colour;
+                }
+
+                i += 1;
+            }
+
+//grid.show();
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 701, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
     let gc = InToSquaredOut;
@@ -1107,6 +1379,35 @@ ex.input.shapes.show();
         //if let Some(rule) = run_experiment_examples(&file, 1000, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_overlay(&exs), output) { return Some(rule); };
 
         //-if let Some(rule) = run_experiment_examples(&file, 1010, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_shape_fill(&exs), output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.coloured_shapes.shapes.len() != 1 || ex.input.coloured_shapes.shapes[0].dimensions() != (3, 3) {
+                return Grid::trivial();
+            }
+
+            let mut grid = ex.input.grid.clone();
+            let ss = &ex.input.coloured_shapes.shapes[0];
+
+            for c in ss.cells.values() {
+                match (c.row - ss.orow, c.col - ss.ocol) {
+                    (0, 0) => grid.draw_mut(UpLeft, c.row, c.col, c.colour),
+                    (0, 1) => grid.draw_mut(Up, c.row, c.col, c.colour),
+                    (0, 2) => grid.draw_mut(UpRight, c.row, c.col, c.colour),
+                    (1, 0) => grid.draw_mut(Left, c.row, c.col, c.colour),
+                    (1, 1) => (),
+                    (1, 2) => grid.draw_mut(Right, c.row, c.col, c.colour),
+                    (2, 0) => grid.draw_mut(DownLeft, c.row, c.col, c.colour),
+                    (2, 1) => grid.draw_mut(Down, c.row, c.col, c.colour),
+                    (2, 2) => grid.draw_mut(DownRight, c.row, c.col, c.colour),
+                    _ => todo!()
+                }
+            }
+//grid.show();
+
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 696, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -1251,15 +1552,12 @@ ex.input.shapes.show();
                     return Grid::trivial();
                 }
 
-                let mut s1 = if rs > cs {
-                    Shape::new_sized_coloured(cs, cs, Black)
+                let (mut s1,mut s2) = if rs < cs {
+                    (Shape::new_sized_coloured(rs, rs, Black),
+                    Shape::new_sized_coloured_position(0, rs, rs, rs, Black))
                 } else {
-                    Shape::new_sized_coloured(rs, rs, Black)
-                };
-                let mut s2 = if rs > cs {
-                    Shape::new_sized_coloured_position(0, cs, cs, cs, Black)
-                } else {
-                    Shape::new_sized_coloured_position(rs, 0, rs, rs, Black)
+                    (Shape::new_sized_coloured(cs, cs, Black),
+                    Shape::new_sized_coloured_position(cs, 0, cs, cs, Black))
                 };
 
                 let mut size0 = 0;
@@ -2002,6 +2300,65 @@ ex.input.shapes.show();
 
         if let Some(rule) = run_experiment(task, 1198, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.len() < 3 {
+                return Grid::trivial();
+            }
+
+            let mut shapes = ex.input.shapes.clone();
+
+            for (i, s) in ex.input.shapes.shapes.iter().enumerate() {
+                if s.size() == ex.input.grid.size() {
+                    shapes.shapes.remove(i);
+                }
+            }
+
+            shapes.shapes.sort_by(|a, b| b.size().cmp(&a.size()));
+
+            let mut new_shapes = Shapes::new_sized(shapes.shapes[0].cells.rows, shapes.shapes[0].cells.columns);
+
+            for s in shapes.shapes.iter() {
+                let mut ns = s.to_origin();
+
+                ns.force_recolour_mut(s.colour);
+
+                new_shapes.shapes.push(ns);
+            }
+
+//new_shapes.to_grid().show();
+            new_shapes.to_grid()
+        };
+
+        if let Some(rule) = run_experiment(task, 1199, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.is_empty() || colour_diffs.len() != 1 {
+                return Grid::trivial();
+            }
+
+            let bg = ex.input.grid.majority_colour();
+
+            let mut grid = ex.input.grid.clone();
+
+            for s in ex.input.shapes.shapes.iter() {
+                if s.dimensions() != ex.input.grid.dimensions() {
+                    let (dir, r, c) = s.has_border_break();
+
+                    if s.orow == ex.input.grid.cells.rows - 1 || s.ocol == ex.input.grid.cells.columns - 1 {
+                        return Grid::trivial();
+                    }
+
+                    grid.draw_bg_mut(dir, r, c, colour_diffs[0], bg);
+                    grid.flood_fill_bg_mut(s.orow + 1, s.ocol + 1, NoColour, bg, colour_diffs[0]);
+                }
+            }
+
+//grid.show();
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 1200, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
     let gc = MirrorCIn;
@@ -2127,49 +2484,97 @@ ex.input.shapes.show();
 
         //-if let Some(rule) = run_experiment_examples(&file, 1050, experiment, trans, is_test, examples, &targets, done, tries, &|exs| cat_expand_3x3(&exs), output) { return Some(rule); };
 
-        if examples.examples[0].input.grid.size() * 9 == examples.examples[0].output.grid.size() {
-            for n in 0 .. 2 {
-                let colour = if n == 1 {
-                    let shapes_out = examples.examples[0].output.coloured_shapes.shapes.len();
-                    let h = examples.examples[0].input.grid.cell_colour_cnt_map();
-                    let colours: Vec<Colour> = h.iter().filter(|(_, &v)| v == shapes_out).map(|(&k,_)| k).collect();
+        if let Some(rule) = run_experiment(task, 2200, experiment, trans, is_test, examples, &targets, done, tries, &|ex| repeat_pattern(&ex, Black), output) { return Some(rule); };
 
-                    if colours.len() != 1 {
-                        NoColour
-                    } else {
-                        colours[0]
-                    }
-                } else {
-                    NoColour
-                };
+        let func = |ex: &Example| {
+            let colour = if ex.input.grid.colour == Mixed {
+                ex.input.grid.find_max_colour()
+            } else {
+                ex.input.grid.colour
+            };
 
-                let func = |ex: &Example| {
-                    let shape = &ex.input.grid.as_shape();
-                    let colour = if n == 0 {
-                        let (colour, _) = shape.colour_cnt(false);
+            repeat_pattern(ex, colour)
+        };
 
-                        colour
-                    } else {
-                        colour
-                    };
+        if let Some(rule) = run_experiment(task, 2201, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
-                    let posns = shape.colour_position(colour);
-                    let mut shapes = Shapes::new_sized(shape.cells.rows * 3, shape.cells.columns * 3);
+        let func = |ex: &Example| {
+            let colour = if ex.input.grid.colour == Mixed {
+                ex.input.grid.find_min_colour()
+            } else {
+                ex.input.grid.colour
+            };
 
-                    for (r, c) in posns.iter() {
-                        let or = r * 3;
-                        let oc = c * 3;
+            repeat_pattern(ex, colour)
+        };
 
-                        shapes.shapes.push(shape.translate_absolute(or, oc));
-                    }
-//shapes.to_grid().show();
-                    shapes.to_grid()
-                };
+        if let Some(rule) = run_experiment(task, 2202, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
-                if let Some(rule) = run_experiment(task, 1353, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+        if let Some(rule) = run_experiment_colours(task, 2203, experiment, is_test, examples, &targets, done, &|ex, colour| repeat_pattern(ex, colour), output) { return Some(rule); };
+
+        /*
+        let func = |ex: &Example| {
+            if !cat.contains(&InLessThanOut) {
+                return Grid::trivial();
             }
-        }
+            let colour = if ex.input.grid.colour == Mixed {
+                ex.input.grid.find_max_colour()
+            } else {
+                ex.input.grid.colour
+            };
+            let shape = ex.input.grid.as_shape();
+            let (rs, cs) = ex.input.grid.dimensions();
 
+            let shapes = shape.chequer(rs, cs, &|r,c| ex.input.grid.cells[(r / rs,c / cs)].colour == colour, &|s| s.clone(), true);
+
+            shapes.to_grid()
+        };
+
+        if let Some(rule) = run_experiment(task, 2200, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if !cat.contains(&InLessThanOut) {
+                return Grid::trivial();
+            }
+            let colour = if ex.input.grid.colour == Mixed {
+                ex.input.grid.find_min_colour()
+            } else {
+                ex.input.grid.colour
+            };
+            let shape = ex.input.grid.as_shape();
+            let (rs, cs) = ex.input.grid.dimensions();
+
+            let shapes = shape.chequer(rs, cs, &|r,c| ex.input.grid.cells[(r / rs,c / cs)].colour == colour, &|s| s.clone(), true);
+
+            shapes.to_grid()
+        };
+
+        if let Some(rule) = run_experiment(task, 2201, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        if examples.examples[0].input.grid.size().pow(2) == examples.examples[0].output.grid.size() {
+            let func = |ex: &Example| {
+                let (colour, _) = ex.input.grid.as_shape().colour_cnt(false);
+
+                repeat_pattern(ex, colour)
+            };
+
+            if let Some(rule) = run_experiment(task, 1353, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+            let shapes_out = examples.examples[0].output.coloured_shapes.shapes.len();
+            let h = examples.examples[0].input.grid.cell_colour_cnt_map();
+            let colours: Vec<Colour> = h.iter().filter(|(_, &v)| v == shapes_out).map(|(&k,_)| k).collect();
+
+            let func = |ex: &Example| {
+                if colours.len() != 1 {
+                    return Grid::trivial();
+                }
+
+                repeat_pattern(ex, colours[0])
+            };
+
+            if let Some(rule) = run_experiment(task, 1354, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+        }
+        */
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
     let gc = IdenticalNoPixels;
@@ -2508,6 +2913,40 @@ println!("139 --- {file}");
         };
 
         if let Some(rule) = run_experiment(task, 1694, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.shapes.shapes.len() < 3 || ex.input.shapes.shapes.len() % 2 == 0 {
+                return Grid::trivial();
+            }
+
+            let mut shapes = ex.input.shapes.clone();
+            let mut rs: Vec<&Shape> = Vec::new();
+            let mut ss: Vec<&Shape> = Vec::new();
+
+            for s in ex.input.shapes.shapes.iter() {
+                if s.size() == 1 {
+                    rs.push(&s);
+                }
+            }
+
+            for s in ex.input.coloured_shapes.shapes.iter() {
+                if s.size() > 1 && !s.has_border() {
+                    ss.push(&s);
+                }
+            }
+
+            //rs.sort();
+            //ss.sort();
+
+            for (s, m) in rs.iter().zip(ss.iter()) {
+                shapes.shapes.push(m.recolour(m.colour, s.colour));
+            }
+
+//shapes.to_grid().show();
+            shapes.to_grid()
+        };
+
+        if let Some(rule) = run_experiment(task, 1695, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -2859,6 +3298,28 @@ println!("139 --- {file}");
         };
 
         if let Some(rule) = run_experiment(task, 1955, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
+        let func = |ex: &Example| {
+            if ex.input.coloured_shapes.shapes.len() != 1 {
+                return Grid::trivial();
+            }
+
+            let ccm = ex.input.coloured_shapes.shapes[0].cell_colour_cnt_map();
+            let mut grid = ex.input.grid.clone();
+            let div_colour = if let Some((_, colour)) = ccm.iter().map(|(c,n)| (n, c)).max() {
+                *colour
+            } else {
+                NoColour
+            };
+            if let Some((_, colour)) = ccm.iter().filter(|(&c, _)| c != div_colour).map(|(c,n)| (n, c)).max() {
+                grid.cells[(ex.input.grid.cells.rows-1, ex.input.grid.cells.columns / 2)].colour = *colour;
+            }
+
+grid.show();
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 1956, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -3343,12 +3804,12 @@ println!("139 --- {file}");
         if let Some(rule) = run_experiment(task, 2396, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         let func = |ex: &Example| {
-
             let mut grid = ex.input.grid.clone();
 
             for c in 0 .. grid.cells.columns {
                 if grid.cells[(grid.cells.rows-1,c)].colour != Black {
                     let mut colour = grid.cells[(grid.cells.rows-1,c)].colour;
+
                     for r in (0 .. grid.cells.rows).rev() {
                         let col = grid.cells[(r,c)].colour;
 
@@ -3361,7 +3822,6 @@ println!("139 --- {file}");
                 }
             }
 
-//grid.show();
             grid
         };
 
@@ -3370,6 +3830,7 @@ println!("139 --- {file}");
         if examples.examples[0].input.grid.cells.columns != examples.examples[0].input.grid.cells.rows {
             let n = examples.examples[0].input.grid.cells.columns / examples.examples[0].input.grid.cells.rows;
             let s_to_s = examples.split_n_map_horizontal(n);
+
             let func = |ex: &Example| {
                 let gc = &ex.input.grid.cells;
 
@@ -3386,12 +3847,11 @@ println!("139 --- {file}");
                         grid.copy_to_position_mut(&ns, 0, i * s.cells.columns);
                     }
                 }
-    //grid.show();
 
                 grid
             };
 
-            if let Some(rule) = run_experiment(task, 2397, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+            if let Some(rule) = run_experiment(task, 2398, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
             let n = examples.examples[0].input.grid.cells.rows / examples.examples[0].input.grid.cells.columns;
             let s_to_s = examples.split_n_map_vertical(n);
@@ -3411,13 +3871,42 @@ println!("139 --- {file}");
                         grid.copy_to_position_mut(&ns, i * s.cells.rows, 0);
                     }
                 }
-    //grid.show();
 
                 grid
             };
 
-            if let Some(rule) = run_experiment(task, 2398, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+            if let Some(rule) = run_experiment(task, 2399, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
         }
+
+        let func = |ex: &Example| {
+            if ex.input.coloured_shapes.shapes.len() != 3 {
+                return Grid::trivial();
+            }
+
+            let cnt = ex.input.coloured_shapes.shapes[0].size();
+            let r = ex.input.coloured_shapes.shapes[1].orow;
+
+            if cnt > r {
+                return Grid::trivial();
+            }
+
+            let cc = ex.input.coloured_shapes.shapes[2].cell_colour_cnt_map();
+            let mut grid = ex.input.grid.clone();
+
+            for cell in ex.input.coloured_shapes.shapes[2].cells.values() {
+                if let Some(n) = cc.get(&cell.colour) {
+                    if *n == cnt {
+                        for i in 1 ..= cnt {
+                            grid.cells[(r - i, cell.col)].colour = cell.colour;
+                        }
+                    }
+                }
+            }
+
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 2391, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
         *cap_todo.entry(gc).or_insert(0) += 1;
     }
@@ -3643,11 +4132,13 @@ println!("139 --- {file}");
                 return Grid::trivial();
             }
 
-            if g.cells.rows > g.cells.columns {
-                g.as_shape().chequer(1, rs, &|r,_| r % (g.cells.rows * 2) == 0, &|s| s.mirrored_r(), false).to_grid()
+            let grid = if g.cells.rows > g.cells.columns {
+                g.as_shape().chequer(1, cs, &|r,_| r % (g.cells.rows * 2) == 0, &|s| s.mirrored_c(), false).to_grid()
             } else {
-                g.as_shape().chequer(1, rs, &|_,c| c % (g.cells.columns * 2) == 0, &|s| s.mirrored_c(), false).to_grid()
-            }
+                g.as_shape().chequer(1, cs, &|_,c| c % (g.cells.columns * 2) == 0, &|s| s.mirrored_c(), false).to_grid()
+            };
+
+            grid
         };
 
         if let Some(rule) = run_experiment(task, 2627, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
@@ -3810,9 +4301,8 @@ println!("139 --- {file}");
             }
             let shape = ex.input.grid.as_shape();
 
-            let grid = shape.chequer(cs, rs, &|_,c| c % (in_cs * 2) != 0, &|s| s.mirrored_c(), false).to_grid();
+            let grid = shape.chequer(rs, cs, &|_,c| c % (in_rs * 2) != 0, &|s| s.mirrored_c(), false).to_grid();
 
-//grid.show();
             grid.clone()
         };
 
@@ -4967,7 +5457,8 @@ eprintln!("yes 3");
 
         let func = |ex: &Example| {
             let shapes = ex.input.grid.split_2();
-            if shapes.len() != 2 || !ex.cat.contains(&OutRInWidth(2)) || colour_diffs.is_empty() {
+
+            if shapes.len() != 2 || colour_diffs.is_empty() {
                 return Grid::trivial();
             }
 
@@ -5301,6 +5792,28 @@ shapes.trim_to_grid().show();
             */
         }
 
+        let func = |ex: &Example| {
+            if colour_diffs.len() != 1 || ex.input.shapes.shapes.is_empty() {
+                return Grid::trivial();
+            }
+
+            // Assume all shapes are the same size
+            let (rs, cs) = ex.majority_dimensions();
+            let mut grid = ex.input.grid.clone();
+
+            grid.recolour_mut(Black, colour_diffs[0]);
+            grid.recolour_mut(all_colour_diffs[0], Black);
+
+            grid.background_border_mut();
+
+            grid.row_dividers_mut(rs);
+            grid.col_dividers_mut(cs);
+
+            grid
+        };
+
+        if let Some(rule) = run_experiment(task, 4029, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+
         *cap_todo.entry(gc).or_insert(0) += 1;
     } 
     let gc = SingleColourOut;
@@ -5578,7 +6091,7 @@ shapes.trim_to_grid().show();
         shapes.to_grid_colour(bg)
     };
 
-    if let Some(rule) = run_experiment(task, 4315, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+    if let Some(rule) = run_experiment(task, 100000, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     let in_colour = examples.examples[0].output.grid.get_diff_colour(&examples.examples[0].input.grid);
     let colour = examples.examples[0].io_colour_diff();
@@ -5595,7 +6108,7 @@ shapes.trim_to_grid().show();
         shapes.to_grid()
     };
 
-    if let Some(rule) = run_experiment(task, 4332, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+    if let Some(rule) = run_experiment(task, 100010, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     let in_grid = &examples.examples[0].input.grid;
     let out_grid = &examples.examples[0].output.grid;
@@ -5622,7 +6135,7 @@ shapes.trim_to_grid().show();
         grid
     };
 
-    if let Some(rule) = run_experiment(task, 4359, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
+    if let Some(rule) = run_experiment(task, 100020, experiment, trans, is_test, examples, &targets, done, tries, &func, output) { return Some(rule); };
 
     *cap_todo.entry(CatchAll).or_insert(0) += 1;
 
@@ -5683,6 +6196,31 @@ fn run_experiment_tries(task: &str, experiment: usize, experiment_todo: &str, tr
     *tries += 1;
 
     save(task, experiment, trans, is_test, &ans, targets, done, output)
+}
+
+fn run_experiment_colours(task: &str, experiment: usize, experiment_todo: &str, is_test: bool, examples: &Examples, targets: &[Grid], done: &mut BTreeSet<String>, func: &(dyn Fn(&Example, Colour) -> Grid + RefUnwindSafe), output: &mut BTreeMap<String, Vec<OutputData>>) -> Option<usize> {
+    if !experiment_todo.is_empty() {
+        if let Ok(ex) = experiment_todo.parse::<usize>() {
+            if ex != experiment {
+                return None;
+            }
+        } 
+    }
+    if done.contains(task) {   // already done???
+        return Some(usize::MAX);
+    }
+
+    let ans = panic::catch_unwind(|| experiment_colours(examples, func));
+
+    let ans = match ans {
+        Ok(ans) => ans,
+        Err(e) => {
+            eprintln!("{task} / {experiment} Exception: {e:?}");
+            vec![Grid::trivial()]
+        },
+    };
+
+    save(task, experiment, NoTrans, is_test, &ans, targets, done, output)
 }
 
 #[allow(clippy::too_many_arguments)]

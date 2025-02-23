@@ -239,6 +239,10 @@ impl Colour {
         (1..=9).map(Self::from_usize).collect()
     }
 
+    pub const fn base_colours() -> &'static [Self] {
+        &[Self::Black, Self::Blue, Self::Red, Self::Green, Self::Yellow, Self::Grey, Self::Fuchsia, Self::Orange, Self::Teal, Self::Brown]
+    }
+
     pub fn is_unit(&self) -> bool {
         *self > Self::Black && *self <= Self::Brown
     }
@@ -416,21 +420,23 @@ pub enum GridCategory {
     MirrorROut,
     MirrorCIn,
     MirrorCOut,
-    NoColoursIn(usize),
-    NoColoursOut(usize),
     NoColouredShapesIn(usize),
     NoColouredShapesOut(usize),
-    NotCat,
+    NoColoursIn(usize),
+    NoColoursOut(usize),
+    NoNetColouredShapesIn,
+    NoNetColouredShapesOut,
     NoShapesIn(usize),
     NoShapesOut(usize),
+    NotCat,
     NxNIn(usize),
     NxNOut(usize),
-    OutRInHeight(usize),
-    OutRInWidth(usize),
     OutLessCountIn,
     OutLessCountInColoured,
     OutLessThanIn,
     OutLine,
+    OutRInHeight(usize),
+    OutRInWidth(usize),
     OutSameSize,
     OutSquare,
     OverlayInSame,
@@ -623,6 +629,7 @@ pub enum Direction {
     FromDownLeft,
     FromDownRight,
     Other,
+    SameDir,
 }
 
 impl Direction {
@@ -641,6 +648,7 @@ impl Direction {
             Self::FromDownLeft  => Self::FromUpRight,
             Self::FromDownRight => Self::FromUpLeft,
             Self::Other         => Self::Other,
+            Self::SameDir       => Self::SameDir,
         }
     }
 }

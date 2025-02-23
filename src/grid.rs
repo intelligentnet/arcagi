@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use pathfinding::prelude::Matrix;
 use crate::cats::Colour::*;
@@ -13,6 +14,19 @@ pub struct Grid {
     pub colour: Colour,
     pub cells: Matrix<Cell>,
     //pub cats: BTreeSet<ShapeCategory>,
+}
+
+impl Ord for Grid {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (&self.to_json(), &self.colour).cmp(&(&other.to_json(), &other.colour))
+        //self.colour.cmp(&other.colour)
+    }
+}
+
+impl PartialOrd for Grid {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Grid {
@@ -480,6 +494,68 @@ impl Grid {
         }
     }
 
+    pub fn negative_mut(&mut self, colour: Colour) {
+        self.negative_dir_mut(colour, vec![]);
+    }
+
+    pub fn negative_dir_all_mut(&mut self, colour: Colour) {
+        self.negative_dir_mut(colour, vec![Up, Down, Left, Right]);
+    }
+
+    pub fn negative_dir_mut(&mut self, colour: Colour, exclude: Vec<Direction>) {
+        for r in 0 .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                if r == 0 && exclude.contains(&Up) || c == 0 && exclude.contains(&Left) || r == self.cells.rows - 1 && exclude.contains(&Down) || c == self.cells.columns - 1 && exclude.contains(&Right) {
+                    continue;
+                }
+
+                if self.cells[(r,c)].colour != Black {
+                    self.cells[(r,c)].colour = Black;
+                } else {
+                    self.cells[(r,c)].colour = colour;
+                }
+            }
+        }
+    }
+
+    pub fn background_border_mut(&mut self) {
+        let (rs, cs) = self.dimensions();
+
+        for r in 0 .. rs {
+            self.cells[(r,0)].colour = Black;
+            self.cells[(r,cs-1)].colour = Black;
+        }
+
+        for c in 0 .. cs {
+            self.cells[(0,c)].colour = Black;
+            self.cells[(rs-1,c)].colour = Black;
+        }
+    }
+
+    pub fn row_dividers_mut(&mut self, rs: usize) {
+        let mut r = rs + 1;
+
+        while r < self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                self.cells[(r,c)].colour = Black;
+            }
+
+            r += rs + 1;
+        }
+    }
+
+    pub fn col_dividers_mut(&mut self, cs: usize) {
+        let mut c = cs + 1;
+
+        while c < self.cells.columns {
+            for r in 0 .. self.cells.rows {
+                self.cells[(r,c)].colour = Black;
+            }
+
+            c += cs + 1;
+        }
+    }
+
     pub fn recolour(&self, from: Colour, to: Colour) -> Self {
         let mut grid = self.clone();
 
@@ -550,6 +626,12 @@ impl Grid {
         }
     }
 
+    pub fn draw_lines_from_shapes(&mut self, shapes: &[Shape], overwrite: bool, hv: bool) {
+        let v: Vec<&Shape> = shapes.iter().collect();
+
+        self.draw_lines(&v, overwrite, hv);
+    }
+
     pub fn draw_lines(&mut self, shapes: &[&Shape], overwrite: bool, hv: bool) {
         for (j, s) in shapes.iter().enumerate() {
             for shape in shapes.iter().skip(j) {
@@ -604,7 +686,7 @@ impl Grid {
                 }
             },
             UpRight => {
-                for (r, c) in ((0 ..= r).rev()).zip(0 ..= self.cells.columns) {
+                for (r, c) in ((0 ..= r).rev()).zip(c ..= self.cells.columns) {
                     if r < self.cells.rows && c < self.cells.columns {
                         change_colour(&mut self.cells[(r,c)].colour, colour, bg);
                     }
@@ -1121,7 +1203,7 @@ impl Grid {
     }
 
     pub fn dimensions(&self) -> (usize, usize) {
-        (self.cells.columns, self.cells.rows)
+        (self.cells.rows, self.cells.columns)
     }
 
     pub fn add_border(&self, n: usize) -> Self {
@@ -1608,6 +1690,10 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         self.cells.items()
             .filter(|((_, c), cell)| *c == self.cells.rows - 1 && cell.colour != Black)
             .count() == self.cells.rows - 1
+    }
+
+    pub fn has_border(&self) -> bool {
+        self.border_top() && self.border_bottom() && self.border_left() && self.border_right()
     }
 
     pub fn mirrored_rows(&self) -> Self {
@@ -2785,7 +2871,6 @@ println!("BG not Black {:?}", s.colour);
     }
 
     pub fn repeat_rows(&self, start: usize, colour: Colour) -> Vec<usize> {
-//println!("{:?}", self.dimensions());
         let mut res: Vec<usize> = vec![start];
         let row: Vec<Colour> = (0 .. self.cells.rows)
             .map(|r| self.cells[(r,start)].colour)
@@ -2856,7 +2941,11 @@ println!("BG not Black {:?}", s.colour);
     }
 
     pub fn square(&self) -> usize {
-        self.cells.rows * self.cells.columns
+        if self.is_square() {
+            self.cells.rows * self.cells.columns
+        } else {
+            0
+        }
     }
 
     pub fn height(&self) -> usize {
@@ -3458,6 +3547,10 @@ println!("BG not Black {:?}", s.colour);
             }
         }
 
+        if min_r == usize::MAX || min_c == usize::MAX {
+            return (0, 0, 0, 0);
+        }
+
         (min_r, min_c, max_r, max_c)
     }
 
@@ -3664,7 +3757,7 @@ println!("BG not Black {:?}", s.colour);
         let hc = self.cells.columns / n;
         let mut gs: Vec<Grid> = Vec::new();
 
-        if hr == 0 || hc == 0 || self.cells.rows != hc || self.cells.columns % n != 0 {
+        if hr == 0 || hc == 0 {
             return Vec::new();
         }
 
@@ -3673,6 +3766,7 @@ println!("BG not Black {:?}", s.colour);
 
             gs.push(s);
         }
+//gs.iter().for_each(|g| g.show());
 
         gs
     }
@@ -3685,7 +3779,7 @@ println!("BG not Black {:?}", s.colour);
         let hc = self.cells.columns;
         let mut gs: Vec<Grid> = Vec::new();
 
-        if hr == 0 || hc == 0 || self.cells.columns != hr || self.cells.rows % n != 0 {
+        if hr == 0 || hc == 0 {
             return Vec::new();
         }
 
@@ -3856,6 +3950,15 @@ println!("BG not Black {:?}", s.colour);
         for (r, c) in other.cells.keys() {
             if self.cells[(or + r, oc + c)].colour == Black {
                 self.cells[(or + r, oc + c)].colour = other.cells[(r, c)].colour;
+            }
+        }
+    }
+
+
+    pub fn fill_patch_coord_mut(&mut self, or: usize, oc: usize, rs: usize, cs: usize, colour: Colour) {
+        for r in or .. or + rs {
+            for c in oc .. oc + cs {
+                self.cells[(r, c)].colour = colour;
             }
         }
     }

@@ -90,7 +90,7 @@ pub fn experiment_grid(ex: &Examples, file: &str, experiment: usize, _trans: Tra
                 */
                 if ans.equals(target) != Colour::Same {
                     if n == usize::MAX {
-                        if attempts > 0 && (experiment < 1000 || attempts > 1) {
+                        if attempts > 0 && (experiment < 100000 || attempts > 1) {
                             println!("{file} {experiment:<4}: {attempts} worked out of {}", ex.examples.len());
                         }
                         return ex.tests.iter().map(|_| Grid::trivial()).collect::<Vec<_>>();
@@ -136,7 +136,7 @@ pub fn experiment_example(ex: &Examples, file: &str, experiment: usize, _trans: 
 //ans.show();
 
         if ans == Grid::trivial() || ans.equals(target) != Colour::Same {
-            if attempts > 0 && (experiment < 1000 || attempts > 1) {
+            if attempts > 0 && (experiment < 100000 || attempts > 1) {
                 println!("{file} {experiment:<4}: {attempts} worked out of {}", ex.examples.len());
             }
             return ex.tests.iter().map(|_| Grid::trivial()).collect::<Vec<_>>();
@@ -157,4 +157,32 @@ pub fn experiment_example(ex: &Examples, file: &str, experiment: usize, _trans: 
         ans
     })
     .collect()
+}
+
+pub fn experiment_colours(ex: &Examples, func: &(dyn Fn(&Example, Colour) -> Grid + RefUnwindSafe)) -> Vec<Grid> {
+    const COLOURS: &[Colour]  = Colour::base_colours();
+
+    'outer:
+    for colour in COLOURS {
+        for e in ex.examples.iter() {
+            let target = &e.output.grid;
+            let ans = func(e, *colour);
+
+            if ans == Grid::trivial() || ans.equals(target) != Colour::Same {
+                continue 'outer;
+            }
+        }
+        
+        // if experiments work then run tests
+        let ans = ex.tests.iter().map(|test| {
+            let ans = func(test, *colour);
+
+            ans
+        })
+        .collect();
+
+        return ans;
+    }
+
+    ex.tests.iter().map(|_| Grid::trivial()).collect::<Vec<_>>()
 }

@@ -6,6 +6,7 @@ use crate::cats::*;
 use crate::examples::*;
 use crate::grid::*;
 use crate::shape::*;
+//use crate::rules::Colour::Mixed;
 //use crate::experiments::*;
 
 pub fn move_only(grid: &Grid, n: &mut usize) -> Grid {
@@ -89,6 +90,22 @@ pub fn transform_only(grid: &Grid, n: &mut usize) -> Grid {
     }
 }
 
+/*
+pub fn try_colours(grid: &Grid, n: &mut usize, func: &(dyn Fn(&Grid, Colour) -> Grid)) -> Grid {
+    //let colours = Colour::colours();
+    const COLOURS: &[Colour]  = Colour::base_colours();
+
+    if *n == usize::MAX {
+        *n = COLOURS.len();
+    }
+    if *n == 0 {
+        Grid::trivial()
+    } else {
+        func(grid, COLOURS[*n])
+    }
+}
+*/
+
 pub fn simple_diffs(exs: &Examples) -> Option<Vec<Grid>> {
     let mut diffs: Vec<Grid> = Vec::new();
 
@@ -165,6 +182,38 @@ pub fn difference_shapes(exs: &Examples, coloured: bool) {
         for ex in test.input.shapes.shapes.iter() {
             ex.show();
         }
+    }
+}
+
+/*
+pub fn repeat_pattern(ex: &Example, colour: Colour) -> Grid {
+    let shape = &ex.input.grid.as_shape();
+    let posns = shape.colour_position(colour);
+    let rows = shape.cells.rows;
+    let cols = shape.cells.columns;
+println!("{rows}/{cols} {colour:?}");
+shape.show();
+    let mut shapes = Shapes::new_sized(rows.pow(2), cols.pow(2));
+
+    for (r, c) in posns.iter() {
+        let or = r * 3;
+        let oc = c * 3;
+
+        shapes.shapes.push(shape.translate_absolute(or, oc));
+    }
+ex.output.grid.show();
+shapes.to_grid().show();
+    shapes.to_grid()
+}
+*/
+pub fn repeat_pattern(ex: &Example, colour: Colour) -> Grid {
+    let shape = ex.input.grid.as_shape();
+    let (rs, cs) = ex.input.grid.dimensions();
+
+    if colour == Colour::Black {
+        shape.chequer(rs, cs, &|r,c| ex.input.grid.cells[(r / rs,c / cs)].colour != colour, &|s| s.clone(), true).to_grid()
+    } else {
+        shape.chequer(rs, cs, &|r,c| ex.input.grid.cells[(r / rs,c / cs)].colour == colour, &|s| s.clone(), true).to_grid()
     }
 }
 
