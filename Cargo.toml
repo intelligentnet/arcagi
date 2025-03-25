@@ -27,6 +27,6 @@ strum_macros = "^0.26.4"
 #regex = "^1.10"
 #peg = "^0.8"
 
-[lib]
-name = "arc_agi"
-crate-type = ["rlib", "dylib"]
+#[lib]
+#name = "arc_agi"
+#crate-type = ["rlib", "dylib"]

@@ -5,7 +5,7 @@ WARNING:
 -----
 This code is messy and imcomplete and is likely to change rapidly. At the
 moment it is a set of experiments to guage what works well and what does not.
-It is perhaps 20% complete and will answer about 20% of the examples given.
+It is perhaps 30% complete and will answer about 40% of the examples given.
 
 If you use this code as part of a Kaggle submission, or in any other way, then please give credit where credit is due.
 
