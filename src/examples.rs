@@ -625,6 +625,38 @@ eprintln!("here");
 
         spc
     }
+    
+    pub fn shape_adjacency_map(&self) -> BTreeMap<Shape, Colour> {
+        let in_shapes = &self.input.shapes;
+        let out_shapes = &self.output.shapes;
+        let mut sam: BTreeMap<Shape, Colour> = BTreeMap::new();
+        let ind_colour = in_shapes.smallest().colour;
+
+        for si in in_shapes.shapes.iter() {
+            for so in out_shapes.shapes.iter() {
+                if si.colour != ind_colour && si.equal_shape(&so) {
+                    sam.insert(so.clone(), NoColour);
+                } else if si.colour == ind_colour && si.touching(&so) {
+                    sam.insert(si.clone(), so.colour);
+                }
+            }
+        }
+
+        let mut map: BTreeMap<Shape, Colour> = BTreeMap::new();
+
+        for (s1, colour1) in sam.iter() {
+            if *colour1 != NoColour {
+                for (s2, colour2) in sam.iter() {
+                    if *colour2 == NoColour && s1.touching(&s2) {
+                        map.insert(s1.to_origin(), s2.colour);
+                    }
+                }
+            }
+        }
+//map.iter().for_each(|(s1,s2)| {s1.show_summary(); s2.show_summary();});
+
+        map
+    }
 
     pub fn some(&self, isout: bool, f: &dyn Fn(&Shapes) -> Shape) -> Shape {
         let s = if isout {
@@ -664,6 +696,11 @@ eprintln!("here");
         };
 
         s.shapes.clone()
+    }
+
+    pub fn map_coloured_shapes_to_shape(&self, _shapes: Vec<Shape>) -> Vec<Shapes> {
+        // TODO 626c0bcc
+        Vec::new()
     }
 
     pub fn colour_cnt_diff(&self, inc: bool) -> Colour {
@@ -1241,6 +1278,16 @@ impl Examples {
         }
 
         spc
+    }
+
+    pub fn shape_adjacency_map(&self) -> BTreeMap<Shape, Colour> {
+        let mut sam: BTreeMap<Shape, Colour> = BTreeMap::new();
+
+        for ex in self.examples.iter() {
+            sam.extend(ex.shape_adjacency_map());
+        }
+
+        sam
     }
 
     pub fn colour_shape_map(&self, out: bool) -> BTreeMap<Colour, Shape> {

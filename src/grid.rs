@@ -6,6 +6,7 @@ use crate::cats::Direction::*;
 use crate::cats::Transformation::*;
 use crate::cats::Transformation;
 use crate::cats::{Colour, Direction};
+use crate::utils::*;
 use crate::cell::*;
 use crate::shape::*;
 
@@ -41,7 +42,9 @@ impl Grid {
     }
 
     pub fn trivial() -> Self {
-        Self::new(0, 0, Black)
+        let cells: Matrix<Cell> = Matrix::new(0, 0, Cell::new_empty());
+
+        Self { colour: Black, cells }
     }
 
     pub fn dummy() -> Self {
@@ -218,6 +221,22 @@ impl Grid {
         }
     }
 
+    pub fn find_colour_pixel_coords(&self, colour: Colour) -> (usize, usize) {
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == colour {
+                return (r, c);
+            }
+        }
+
+        (0, 0)
+    }
+
+    pub fn find_different_pixel_coords(&self) -> (usize, usize) {
+        let colour = self.minority_colour();
+
+        self.find_colour_pixel_coords(colour)
+    }
+
     pub fn find_colour(&self, colour: Colour) -> Vec<Cell> {
         self.cells.values().filter(|c| c.colour == colour).cloned().collect()
     }
@@ -241,7 +260,7 @@ impl Grid {
         g
     }
 
-    pub fn find_colours(&self) -> BTreeMap<Colour, usize> {
+    pub fn find_all_colours(&self) -> BTreeMap<Colour, usize> {
         let mut c: BTreeMap<Colour, usize> = BTreeMap::new();
 
         for cell in self.cells.values() {
@@ -252,9 +271,9 @@ impl Grid {
     }
 
     pub fn find_min_colour(&self) -> Colour {
-        let cols = self.find_colours();
+        let cols = self.find_all_colours();
         let col = cols.iter()
-            .filter(|(&col, _)| col != Black)
+            .filter(|&(&col, _)| col != Black)
             .min_by(|col, c| col.1.cmp(c.1))
             .map(|(col, _)| col);
 
@@ -266,9 +285,9 @@ impl Grid {
     }
 
     pub fn find_max_colour(&self) -> Colour {
-        let cols = self.find_colours();
+        let cols = self.find_all_colours();
         let col = cols.iter()
-            .filter(|(&col, _)| col != Black)
+            .filter(|&(&col, _)| col != Black)
             .max_by(|col, c| col.1.cmp(c.1))
             .map(|(col, _)| col);
 
@@ -626,6 +645,101 @@ impl Grid {
         }
     }
 
+    pub fn connect_dots_pairs(&mut self) {
+        self.connect_dots_dir(Other, NoColour);
+    }
+
+    pub fn connect_dots(&mut self) {
+        self.connect_dots_dir(CalcDir, NoColour);
+    }
+
+    pub fn connect_dots_colour(&mut self, colour: Colour) {
+        self.connect_dots_dir(CalcDir, colour);
+    }
+
+    pub fn connect_dots_colour_pairs(&mut self, colour: Colour) {
+        self.connect_dots_dir(Other, colour);
+    }
+
+    // Not perfect: No start and only works for pixels not shapes
+    pub fn connect_dots_dir(&mut self, dir: Direction, col: Colour) {
+        let posns = self.cell_colour_posn_map();
+
+        for (colour, vp) in posns.iter() {
+            let col = if col == NoColour { *colour } else { col };
+
+            if vp.len() == 1 {
+                if dir != Other {
+                    let dir = if dir == CalcDir {
+                        let (r, c) = vp[0];
+
+                        if r == 0 {
+                            Down
+                        } else if c == 0 {
+                            Right
+                        } else if r == self.cells.rows - 1 {
+                            Up
+                        } else {
+                            Left
+                        }
+                    } else {
+                        dir
+                    };
+                    self.draw_mut(dir, vp[0].0, vp[0].1, *colour);
+                }
+            } else {
+                let mut line: BTreeMap<usize,(Direction, usize, usize, usize)> = BTreeMap::new();
+                let mut done: Vec<(Direction, usize, usize, usize)> = Vec::new();
+
+                for (r1, c1) in vp.iter() {
+                    for (r2, c2) in vp.iter() {
+                        if r1 != r2 && c1 == c2 {
+                            let pmin = *r1.min(r2);
+                            let pmax = *r1.max(r2);
+                            let val = (Vertical, *c1, pmin, pmax);
+
+                            if pmax - pmin > 1 && !done.contains(&val) {
+                                line.insert(pmax - pmin, val);
+                                done.push(val);
+                            }
+                        }
+                        if r1 == r2 && c1 != c2 {
+                            let pmin = *c1.min(c2);
+                            let pmax = *c1.max(c2);
+                            let val = (Horizontal, *r1, pmin, pmax);
+
+                            if pmax - pmin > 1 && !done.contains(&val) {
+                                line.insert(pmax - pmin, val);
+                                done.push(val);
+                            }
+                        }
+                    }
+                    if let Some((_, (dir, rc, pmin, pmax))) = line.pop_first() {
+                        line.clear();
+
+                        match dir {
+                            Vertical => {
+                                for r in pmin .. pmax {
+                                    if self.cells[(r,rc)].colour != *colour {
+                                        self.cells[(r,rc)].colour = col;
+                                    }
+                                }
+                            },
+                            Horizontal => {
+                                for c in pmin .. pmax {
+                                    if self.cells[(rc,c)].colour != *colour {
+                                        self.cells[(rc,c)].colour = col;
+                                    }
+                                }
+                            },
+                            _ => todo!()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub fn draw_lines_from_shapes(&mut self, shapes: &[Shape], overwrite: bool, hv: bool) {
         let v: Vec<&Shape> = shapes.iter().collect();
 
@@ -635,110 +749,313 @@ impl Grid {
     pub fn draw_lines(&mut self, shapes: &[&Shape], overwrite: bool, hv: bool) {
         for (j, s) in shapes.iter().enumerate() {
             for shape in shapes.iter().skip(j) {
-                if hv {
-                    self.draw_line_row(s, shape, s.colour, false, false);
-                } else {
-                    self.draw_line_col(s, shape, s.colour, false, false);
+                if s != shape {
+                    if hv {
+                        self.draw_line_row(s, shape, s.colour, false, false);
+                    } else {
+                        self.draw_line_col(s, shape, s.colour, false, false);
+                    }
                 }
             }
         }
         for (j, s) in shapes.iter().enumerate() {
             for shape in shapes.iter().skip(j) {
-                if hv {
-                    self.draw_line_col(s, shape, s.colour, overwrite, false);
-                } else {
-                    self.draw_line_row(s, shape, s.colour, overwrite, false);
+                if s != shape {
+                    if hv {
+                        self.draw_line_col(s, shape, s.colour, overwrite, false);
+                    } else {
+                        self.draw_line_row(s, shape, s.colour, overwrite, false);
+                    }
                 }
             }
         }
     }
 
     pub fn draw_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour) {
-        self.draw_bg_mut(dir, r, c, colour, Black);
+        self.draw_bg_mc_term_mut(dir, r, c, colour, Black, false, false);
     }
 
     pub fn draw_bg_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour, bg: Colour) {
-        fn change_colour(cell_colour: &mut Colour, colour: Colour, bg: Colour) {
-            if *cell_colour == bg || *cell_colour == colour {
+        self.draw_bg_mc_term_mut(dir, r, c, colour, bg, false, false);
+    }
+
+    pub fn draw_mc_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour) {
+        self.draw_bg_mc_term_mut(dir, r, c, colour, Black, true, false);
+    }
+
+    pub fn draw_term_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour) {
+        self.draw_bg_mc_term_mut(dir, r, c, colour, Black, false, true);
+    }
+
+    pub fn draw_bg_mc_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour, bg: Colour) {
+        self.draw_bg_mc_term_mut(dir, r, c, colour, bg, true, false)
+    }
+
+    pub fn draw_bg_term_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour, bg: Colour) {
+        self.draw_bg_mc_term_mut(dir, r, c, colour, bg, false, true)
+    }
+
+    pub fn draw_bg_mc_term_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour, bg: Colour, mc: bool, term: bool) {
+        self.draw_bg_mc_term_other_mut(dir, r, c, colour, bg, mc, term, NoColour)
+    }
+
+    pub fn draw_bg_mc_term_other_mut(&mut self, dir: Direction, r: usize, c: usize, colour: Colour, bg: Colour, mc: bool, term: bool, other_colour: Colour) {
+        fn change_colour(cell_colour: &mut Colour, colour: Colour, bg: Colour, mc: bool, term: bool, other_colour: Colour) -> bool {
+            //if term && *cell_colour != bg && *cell_colour != colour {
+            //if term && (*cell_colour != bg || *cell_colour != colour) {
+            //if term && *cell_colour != bg {
+            if term && *cell_colour != bg && *cell_colour != other_colour {
+                return true;
+            } else if mc && *cell_colour != bg && *cell_colour != colour {
+                *cell_colour = colour + ToBlack;
+            } else if *cell_colour == bg || *cell_colour == colour {
                 *cell_colour = colour;
             }
+
+            false
         }
 
         match dir {
             Up => {
                 for r in 0 ..= r {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             Down => {
                 for r in r .. self.cells.rows {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             Left => {
                 for c in 0 ..= c {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             Right => {
                 for c in c .. self.cells.columns {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             UpRight => {
                 for (r, c) in ((0 ..= r).rev()).zip(c ..= self.cells.columns) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                        if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                     }
                 }
             },
             UpLeft => {
                 for (r, c) in ((0 ..= r).rev()).zip((0 ..= c).rev()) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                        if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                     }
                 }
             },
             DownRight => {
                 for (r, c) in (r .. self.cells.rows).zip(c .. self.cells.columns) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                        if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                     }
                 }
             },
             DownLeft => {
                 for (r, c) in (r .. self.cells.rows).zip((0 ..= c).rev()) {
                     if r < self.cells.rows && c < self.cells.columns {
-                        change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                        if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                     }
                 }
             },
             FromUpRight => {
                 for (r, c) in (0 ..= r).rev().zip(c-1 .. self.cells.columns) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             FromUpLeft => {
                 for (r, c) in (0 ..= r).zip(0 ..= c) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             FromDownRight => {
                 for (r, c) in (r .. self.cells.rows).zip(c .. self.cells.columns) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             FromDownLeft => {
                 for (r, c) in (r-1 .. self.cells.rows).zip((0 ..= c).rev()) {
-                    change_colour(&mut self.cells[(r,c)].colour, colour, bg);
+                    if change_colour(&mut self.cells[(r,c)].colour, colour, bg, mc,  term, other_colour) { break; }
                 }
             },
             _ => {},
         }
     }
 
-    pub fn draw_double_line(&mut self, dir: Direction, s: &Shape, colour: Colour) {
-        self.draw_mut(dir, s.orow, s.ocol, colour);
+    pub fn skip_to(&self, dir: Direction, r: usize, c: usize) -> (usize, usize) {
+        self.skip_to_bg(dir, r, c, Black)
+    }
+
+    pub fn skip_to_bg(&self, dir: Direction, r: usize, c: usize, bg: Colour) -> (usize, usize) {
+        match dir {
+            Up => {
+                for r in 0 ..= r {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            Down => {
+                for r in r .. self.cells.rows {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            Left => {
+                for c in 0 ..= c {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            Right => {
+                for c in c .. self.cells.columns {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            UpRight => {
+                for (r, c) in ((0 ..= r).rev()).zip(c ..= self.cells.columns) {
+                    if r < self.cells.rows && c < self.cells.columns {
+                        if self.cells[(r,c)].colour == bg { return (r, c); }
+                    }
+                }
+            },
+            UpLeft => {
+                for (r, c) in ((0 ..= r).rev()).zip((0 ..= c).rev()) {
+                    if r < self.cells.rows && c < self.cells.columns {
+                        if self.cells[(r,c)].colour == bg { return (r, c); }
+                    }
+                }
+            },
+            DownRight => {
+                for (r, c) in (r .. self.cells.rows).zip(c .. self.cells.columns) {
+                    if r < self.cells.rows && c < self.cells.columns {
+                        if self.cells[(r,c)].colour == bg { return (r, c); }
+                    }
+                }
+            },
+            DownLeft => {
+                for (r, c) in (r .. self.cells.rows).zip((0 ..= c).rev()) {
+                    if r < self.cells.rows && c < self.cells.columns {
+                        if self.cells[(r,c)].colour == bg { return (r, c); }
+                    }
+                }
+            },
+            FromUpRight => {
+                for (r, c) in (0 ..= r).rev().zip(c-1 .. self.cells.columns) {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            FromUpLeft => {
+                for (r, c) in (0 ..= r).zip(0 ..= c) {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            FromDownRight => {
+                for (r, c) in (r .. self.cells.rows).zip(c .. self.cells.columns) {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            FromDownLeft => {
+                for (r, c) in (r-1 .. self.cells.rows).zip((0 ..= c).rev()) {
+                    if self.cells[(r,c)].colour == bg { return (r, c); }
+                }
+            },
+            _ => {},
+        }
+
+        (r, c)
+    }
+
+    pub fn calc_direction(r1: usize, c1: usize, r2: usize, c2: usize) -> Direction {
+        if r1 == r2 && c1 == c2 {
+            return Other;
+        }
+
+        let l1 = (r1 as isize - r2 as isize).abs() as usize;
+        let l2 = (c1 as isize - c2 as isize).abs() as usize;
+
+        if l1 != 0 && l2 != 0 && l1 != l2 {
+            return Other;
+        }
+
+        if l1 == 0 || l2 == 0 {
+            if r1 < r2 { Down }
+            else if r1 > r2 { Up }
+            else if c1 < c2 { Right }
+            else if c1 > c2 { Left }
+            else { Other }
+        } else if r1 < r2 && c1 < c2 {
+            DownRight
+        } else if r1 < r2 && c1 > c2 {
+            DownLeft
+        } else if r1 > r2 && c1 < c2 {
+            UpRight
+        } else if r1 > r2 && c1 > c2 {
+            UpLeft
+        } else {
+            Other
+        }
+    }
+
+    pub fn shape_in_line(&self, shape: &Shape) -> Colour {
+        let r = shape.orow;
+        let c = shape.ocol;
+
+        if self.cells[(r,c)].colour == shape.colour {
+            let mut cnt = 0;
+            let mut colour = NoColour;
+            fn func(col: Colour, colour: &mut Colour, cnt: &mut usize) {
+                if *colour == NoColour || col == *colour {
+                    *cnt += 1;
+                    if col != NoColour {
+                        *colour = col;
+                    }
+                }
+            }
+
+            if r == 0 {
+                func(NoColour, &mut colour, &mut cnt);
+            } else {
+                let col = self.cells[(r-1,c)].colour;
+
+                if col != shape.colour && col != Black {
+                    func(col, &mut colour, &mut cnt);
+                }
+            }
+            if c == 0 {
+                func(NoColour, &mut colour, &mut cnt);
+            } else {
+                let col = self.cells[(r,c-1)].colour;
+
+                if col != shape.colour && col != Black {
+                    func(col, &mut colour, &mut cnt);
+                }
+            }
+            if r == self.cells.rows - 1 {
+                func(NoColour, &mut colour, &mut cnt);
+            } else {
+                let col = self.cells[(r+1,c)].colour;
+
+                if col != shape.colour && col != Black {
+                    func(col, &mut colour, &mut cnt);
+                }
+            }
+            if c == self.cells.columns - 1 {
+                func(NoColour, &mut colour, &mut cnt);
+            } else {
+                let col = self.cells[(r,c+1)].colour;
+
+                if col != shape.colour && col != Black {
+                    func(col, &mut colour, &mut cnt);
+                }
+            }
+
+            if cnt == 2 { colour } else { NoColour }
+        } else {
+            NoColour
+        }
     }
 
     // unfinished 0e671a1a
@@ -1594,12 +1911,28 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         Self::new_from_matrix(&m)
     }
 
+    pub fn cell_colours(&self) -> Vec<Colour>  {
+        self.cell_colour_cnt_map().keys().map(|c| *c).collect()
+    }
+
     pub fn cell_colour_cnt_map(&self) -> BTreeMap<Colour, usize>  {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
 
         for c in self.cells.values() {
             if c.colour != Black {
                 *h.entry(c.colour).or_insert(0) += 1;
+            }
+        }
+
+        h
+    }
+
+    pub fn cell_colour_posn_map(&self) -> BTreeMap<Colour, Vec<(usize, usize)>>  {
+        let mut h: BTreeMap<Colour, Vec<(usize, usize)>> = BTreeMap::new();
+
+        for c in self.cells.values() {
+            if c.colour != Black {
+                h.entry(c.colour).or_default().push((c.row, c.col));
             }
         }
 
@@ -1732,6 +2065,52 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         }
 
         true
+    }
+
+    pub fn populate_skew_edge_lr(&self, shape: &Shape, colour: Colour) -> Shape {
+        let rs = self.row_skew();
+        let mut new_shape = shape.clone();
+
+        for r in 0 .. rs as usize {
+            for c in 0 .. self.cells.columns {
+                if self.cells[(r,c)].colour == colour {
+                    if shape.cells.rows >= r + 1 {
+                        new_shape.cells[(r - shape.orow,c - shape.ocol)].colour = self.cells[(shape.cells.rows - r - 1,c)].colour;
+                    } else {
+                        new_shape.cells[(r - shape.orow,c - shape.ocol)].colour = self.cells[(r,c)].colour;
+                    }
+                } else if self.cells[(c,r)].colour == colour {
+                    if shape.cells.columns >= c + 1 {
+                        new_shape.cells[(c - shape.orow,r - shape.ocol)].colour = self.cells[(r,shape.cells.columns - c - 1)].colour;
+                    } else {
+                        new_shape.cells[(c - shape.orow,r - shape.ocol)].colour = self.cells[(r,c)].colour;
+                    }
+                }
+            }
+        }
+
+        new_shape
+    }
+
+    pub fn populate_skew_edge_tb(&self, shape: &Shape, colour: Colour) -> Shape {
+        let grid = self.rotated_270(1);
+        let mut shape = shape.rot_rect_270();
+
+        let tr = shape.orow;
+
+        shape.orow = shape.ocol;
+        shape.ocol = tr;
+
+        let shape = grid.populate_skew_edge_lr(&shape, colour);
+
+        let mut shape = shape.rot_rect_90();
+
+        let tr = shape.orow;
+
+        shape.orow = shape.ocol;
+        shape.ocol = tr;
+
+        shape
     }
 
     pub fn is_mirror_rows(&self) -> bool {
@@ -2354,6 +2733,65 @@ println!("2 #### {}/{} {}/{}", xsx, xsy, ysx, ysy);
         (0, 0)
     }
 
+    pub fn find_axis_colour(&self, shape: &Shape) -> Colour {
+        self.find_axis_colour_bg(shape, Black)
+    }
+
+    pub fn find_axis_colour_bg(&self, shape: &Shape, bg: Colour) -> Colour {
+        if self.cells.rows <= shape.cells.rows || self.cells.columns <= shape.cells.columns || shape.ocol >= self.cells.columns || shape.orow >= self.cells.rows || shape.orow >= self.cells.rows || shape.ocol >= self.cells.columns {
+            return NoColour;
+        }
+
+        for r in 0 .. shape.cells.rows {
+            for c in shape.ocol .. shape.ocol + shape.cells.columns {
+                if self.cells[(r,c)].colour != bg {
+                    return self.cells[(r,c)].colour;
+                }
+            }
+        }
+        for c in 0 .. shape.cells.columns {
+            for r in shape.orow .. shape.orow + shape.cells.rows {
+                if self.cells[(r,c)].colour != bg {
+                    return self.cells[(r,c)].colour;
+                }
+            }
+        }
+
+        NoColour
+    }
+
+    // Size 4 and 9
+    pub fn colour_squares(&mut self, colour: Colour) {
+        let grid = self.clone();
+
+        for (r, c) in grid.cells.keys() {
+            if surround_cnt(&grid.cells, r, c, Black) == (8, false) {
+                self.cells[(r-1,c-1)].colour = colour;
+                self.cells[(r-1,c)].colour = colour;
+                self.cells[(r-1,c+1)].colour = colour;
+                self.cells[(r,c-1)].colour = colour;
+                self.cells[(r,c)].colour = colour;
+                self.cells[(r,c+1)].colour = colour;
+                self.cells[(r+1,c-1)].colour = colour;
+                self.cells[(r+1,c)].colour = colour;
+                self.cells[(r+1,c+1)].colour = colour;
+            }
+        }
+
+        let grid = self.clone();
+
+        for ((r, c), cell) in grid.cells.items() {
+            let col = cell.colour;
+
+            if col == Black && r < grid.cells.rows - 1 && c < grid.cells.columns - 1 && grid.cells[(r+1,c)].colour == Black && grid.cells[(r,c+1)].colour == Black && grid.cells[(r+1,c+1)].colour == Black {
+                self.cells[(r,c)].colour = colour;
+                self.cells[(r,c+1)].colour = colour;
+                self.cells[(r+1,c)].colour = colour;
+                self.cells[(r+1,c+1)].colour = colour;
+            }
+        }
+    }
+
     fn find_colour_patches_core(&self, colour: Colour) -> Shapes {
         fn mshape(cells: &mut Matrix<Cell>, colour: Colour) -> Option<(usize, usize, Matrix<Cell>)> {
             // Find starting position
@@ -2820,6 +3258,40 @@ println!("BG not Black {:?}", s.colour);
         self.to_shapes_base(true, false, false, NoColour)
     }
 
+    pub fn to_shapes_from_grid_gap(&self, gap: usize) -> Shapes {
+        self.to_shapes_from_grid_gap_border(gap, 0)
+    }
+
+    pub fn to_shapes_from_grid_border(&self, border: usize) -> Shapes {
+        self.to_shapes_from_grid_gap_border(1, border)
+    }
+
+    pub fn to_shapes_from_grid(&self) -> Shapes {
+        self.to_shapes_from_grid_gap_border(1, 0)
+    }
+
+    pub fn to_shapes_from_grid_gap_border(&self, gap: usize, border: usize)  -> Shapes {
+        let rs = self.height() - border * 2;
+        let cs = self.width() - border * 2;
+        let r = (rs as f32).sqrt().abs() as usize;
+        let c = (cs as f32).sqrt().abs() as usize;
+
+        let mut shapes = Shapes::new_sized(self.height(), self.width());
+
+        for ri in (border .. rs).step_by(r + gap) { 
+            for ci in (border .. cs).step_by(c + gap) { 
+                if ri + r > rs || ci + c > cs {
+                    return Shapes::trivial();
+                }
+                let sg = self.subgrid(ri, r, ci, c);
+
+                shapes.shapes.push(sg.as_shape_position(ri, ci));
+            }
+        }
+
+        shapes
+    }
+
     pub fn as_shape(&self) -> Shape {
         if self.size() == 0 {
             return Shape::trivial();
@@ -3083,9 +3555,7 @@ println!("BG not Black {:?}", s.colour);
         let grid = self.recolour(Black, NoColour);
 
         let shapes = grid.to_shapes();
-        let mut new_shapes = shapes.clone();
-
-        new_shapes.shapes = Vec::new();
+        let mut new_shapes = shapes.clone_base();
 
         for s in shapes.shapes.iter() {
             if s.is_full() && grid.has_marker_colour(s, NoColour) {
@@ -3973,6 +4443,94 @@ println!("BG not Black {:?}", s.colour);
         self.clone()
     }
     */
+
+    /**
+     * Code constraint solver predicates
+     */
+    pub fn used_in_row(&self, r: usize, colour: Colour) -> bool {
+        for c in 0 .. self.cells.columns {
+            if self.cells[(r,c)].colour == colour {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn used_in_col(&self, c: usize, colour: Colour) -> bool {
+        for r in 0 .. self.cells.rows {
+            if self.cells[(r,c)].colour == colour {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    // Only needed for Suduko type problems
+    /*
+    pub fn used_in_subgrid(&self, sr: usize, sc: usize, colour: Colour) -> bool {
+        let rl = self.cells.rows;
+        let cl = self.cells.columns;
+        let rs = (rl as f32).sqrt().abs() as usize;
+        let cs = (cl as f32).sqrt().abs() as usize;
+
+        for r in 0 .. rs {
+            for c in 0 .. cs {
+                if self.cells[(r + sr,c + sc)].colour == colour {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn is_valid_move(&self, r: usize, c: usize, colour: Colour) -> bool {
+        //!self.used_in_row(r, colour) && !self.used_in_col(c, colour) && !self.used_in_subgrid(r - r % 3, c - c % 3, colour)
+        !self.used_in_row(r, colour) && !self.used_in_col(c, colour)
+    }
+    */
+
+    // Expensive so only call when sure
+    pub fn solve(&mut self, pred: &dyn Fn(&Self, usize, usize, Colour) -> bool) -> bool {
+        self.solve_depth(pred, 0)
+    }
+
+    fn solve_depth(&mut self, pred: &dyn Fn(&Self, usize, usize, Colour) -> bool, depth: usize) -> bool {
+        fn find_empty_cell(grid: &Grid) -> Option<(usize, usize)> {
+            for ((r, c), cell) in grid.cells.items() {
+                if cell.colour == Black {
+                    return Some((r, c));
+                }
+            }
+
+            None
+        }
+
+        // Might be a bit too conmservative on recursive depth!
+        if self.cells.rows != self.cells.columns || self.cells.rows > 9 || depth > 6 {
+            return false;
+        }
+
+        if let Some((r, c)) = find_empty_cell(self) {
+            for n in 1 ..= self.cells.rows {
+                let colour = Colour::from_usize(n);
+
+                if pred(self, r, c, colour) {
+                    self.cells[(r,c)].colour = colour;
+
+                    if self.solve_depth(pred, depth + 1) {
+                        return true;
+                    }
+
+                    self.cells[(r,c)].colour = Black;
+                }
+            }
+            return false;
+        }
+        true
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -4022,7 +4580,7 @@ impl QualifiedGrid {
     }
 
     pub fn trivial() -> Self {
-        Self { grid: Grid::trivial(), bg: NoColour, shapes: Shapes::new(), coloured_shapes: Shapes::new(), black: Shapes::new() }
+        Self { grid: Grid::trivial(), bg: NoColour, shapes: Shapes::trivial(), coloured_shapes: Shapes::trivial(), black: Shapes::trivial() }
     }
 
     pub fn single_shape_count(&self) -> usize {
@@ -4071,4 +4629,3 @@ impl QualifiedGrid {
     }
     */
 }
-

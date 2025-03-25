@@ -628,8 +628,12 @@ pub enum Direction {
     FromUpRight,
     FromDownLeft,
     FromDownRight,
+    Vertical,
+    Horizontal,
+    Middle,
     Other,
     SameDir,
+    CalcDir,
 }
 
 impl Direction {
@@ -649,6 +653,33 @@ impl Direction {
             Self::FromDownRight => Self::FromUpLeft,
             Self::Other         => Self::Other,
             Self::SameDir       => Self::SameDir,
+            Self::CalcDir       => Self::CalcDir,
+            Self::Vertical      => Self::Vertical,
+            Self::Horizontal    => Self::Horizontal,
+            Self::Middle        => Self::Middle,
+        }
+    }
+
+    pub fn rot(&self) -> Self {
+        match self {
+            Self::Up            => Self::Right,
+            Self::Down          => Self::Left,
+            Self::Left          => Self::Up,
+            Self::Right         => Self::Down,
+            Self::UpLeft        => Self::UpRight,
+            Self::UpRight       => Self::UpLeft,
+            Self::DownLeft      => Self::DownRight,
+            Self::DownRight     => Self::DownLeft,
+            Self::FromUpLeft    => Self::FromUpRight,
+            Self::FromUpRight   => Self::FromUpLeft,
+            Self::FromDownLeft  => Self::FromDownRight,
+            Self::FromDownRight => Self::FromDownLeft,
+            Self::Other         => Self::Other,
+            Self::SameDir       => Self::SameDir,
+            Self::CalcDir       => Self::CalcDir,
+            Self::Vertical      => Self::Vertical,
+            Self::Horizontal    => Self::Horizontal,
+            Self::Middle        => Self::Middle,
         }
     }
 }

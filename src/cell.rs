@@ -57,15 +57,15 @@ impl Eq for Cell {}
 
 impl Cell {
     pub fn new(x: usize, y: usize, colour: usize) -> Self {
-        Cell { row: x, col: y, colour: Colour::new(colour), cat: CellCategory::BG }
+        Self { row: x, col: y, colour: Colour::new(colour), cat: CellCategory::BG }
     }
 
-    pub fn new_empty() -> Self {
-        Cell { row: 0, col: 0, colour: NoColour, cat: CellCategory::BG }
+    pub const fn new_empty() -> Self {
+        Self { row: 0, col: 0, colour: NoColour, cat: CellCategory::BG }
     }
 
     pub fn new_colour(x: usize, y: usize, colour: Colour) -> Self {
-        Cell { row: x, col: y, colour, cat: CellCategory::BG }
+        Self { row: x, col: y, colour, cat: CellCategory::BG }
     }
 
     pub fn above(&self, other: &Self) -> bool {

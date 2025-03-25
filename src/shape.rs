@@ -4,6 +4,7 @@ use array_tool::vec::Uniq;
 use pathfinding::prelude::Matrix;
 use crate::cats::Colour::*;
 use crate::cats::Direction::*;
+use crate::utils::*;
 //use crate::cats::CellCategory::*;
 use crate::cats::*;
 use crate::cell::*;
@@ -131,11 +132,15 @@ impl Shape {
     }
 
     pub fn new_empty() -> Self {
-        let cells = Matrix::new(0, 0, Cell::new(0, 0, 0));
+        let cells = Matrix::new(0, 0, Cell::new_empty());
         //let io_edges: BTreeSet<ShapeEdgeCategory> = BTreeSet::new();
         //let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
 
         Self { orow: 0, ocol: 0, colour: NoColour, cells }
+    }
+
+    pub fn trivial() -> Self {
+        Self::new_empty()
     }
 
     pub fn new9(&self, corners: bool, colour: Colour) -> Self {
@@ -214,10 +219,6 @@ impl Shape {
         s
     }
 
-    pub fn trivial() -> Self {
-        Self::new_empty()
-    }
-
     /*
     pub fn shape_from_reachable(&self, reachable: BTreeSet<(usize, usize)>) -> Self {
         reachable.iter().for_each(|&i| self.cells[i].colour = new_colour)
@@ -239,15 +240,18 @@ impl Shape {
     }
 
     pub fn same_patch(&self, other: &Self) -> bool {
+//self.show();
         if self.size() != other.size() || self.cells.rows != other.cells.rows {
             return false;
         }
 
         for (rc, c) in self.cells.items() {
+//println!("{:?} {:?}", c.colour, other.cells[rc].colour);
             if c.colour != Black && c.colour != other.cells[rc].colour {
                 return false;
             }
         }
+//println!("----------------");
 
         true
     }
@@ -304,7 +308,19 @@ impl Shape {
     }
 
     pub fn to_shapes(&self) -> Shapes {
-        let mut inner_shapes = self.to_grid().to_shapes();
+        self.to_shapes_base(false)
+    }
+
+    pub fn to_shapes_coloured(&self) -> Shapes {
+        self.to_shapes_base(true)
+    }
+
+    pub fn to_shapes_base(&self, coloured: bool) -> Shapes {
+        let mut inner_shapes = if coloured {
+            self.to_grid().to_shapes_coloured_cbg()
+        } else {
+            self.to_grid().to_shapes()
+        };
 
         for s in inner_shapes.shapes.iter_mut() {
             s.orow += self.orow;
@@ -319,6 +335,16 @@ impl Shape {
         }
 
         inner_shapes
+    }
+
+    pub fn pixels_in_shape(&self) -> usize {
+        let bg = self.majority_colour();
+
+        let pixels: usize = self.cells.values()
+            .filter(|c| c.colour != bg)
+            .count();
+            
+        pixels
     }
 
     pub fn shrink_any(&self, coloured: bool) -> Self {
@@ -495,6 +521,26 @@ impl Shape {
     }
     */
 
+    pub fn find_colour_pixel_coords(&self, colour: Colour) -> (usize, usize) {
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == colour {
+                return (r, c);
+            }
+        }
+
+        (0, 0)
+    }
+
+    pub fn find_different_pixel_coords(&self) -> (usize, usize) {
+        let colour = self.minority_colour();
+
+        self.find_colour_pixel_coords(colour)
+    }
+
+    pub fn find_distinct_colours(&self, bg: Colour) -> Vec<Cell> {
+        self.cells.values().filter(|c| c.colour != bg).cloned().collect()
+    }
+
     pub fn shrink_border(&self) -> Self {
         self.shrink_border_colour_n(Black, 1)
     }
@@ -554,6 +600,23 @@ impl Shape {
         this
     }
 
+    // TODO: complete for 3f23242b
+    pub fn shrink_left(&self, n: usize) -> Self {
+        let mut shape = Shape::new_sized_coloured_position(0, self.ocol, self.cells.rows - n, self.cells.columns, self.colour);
+
+        for r in n .. self.cells.rows {
+            for c in 0 .. self.cells.columns {
+                shape.cells[(r - n,c)].row = self.orow - n;
+                shape.cells[(r - n,c)].col = self.ocol;
+                shape.cells[(r - n,c)].colour = self.cells[(r,c)].colour;
+            }
+        }
+//self.show_summary();
+//shape.show_summary();
+
+        shape
+    }
+
     pub fn on_edge(&self, grid: &Grid) -> bool {
         let r = self.orow;
         let c = self.ocol;
@@ -595,10 +658,51 @@ impl Shape {
         self.shrink_any(true)
     }
 
-    pub fn euclidian(&self) -> f64 {
-        ((self.orow * self.orow + self.ocol * self.ocol) as f64).sqrt()
+    pub fn euclidian(&self, other: &Self) -> f64 {
+        let dr = (self.orow as isize - other.orow as isize).abs();
+        let dc = (self.ocol as isize - other.ocol as isize).abs();
+
+        ((dr * dr + dc * dc) as f64).sqrt()
     }
 
+    pub fn manhattan(&self, other: &Self) -> usize {
+        let dr = (self.orow as isize - other.orow as isize).abs();
+        let dc = (self.ocol as isize - other.ocol as isize).abs();
+
+        (dr + dc) as usize
+    }
+
+    pub fn is_diagonal(&self, other: &Self) -> bool {
+        let dr = (self.orow as isize - other.orow as isize).abs();
+        let dc = (self.ocol as isize - other.ocol as isize).abs();
+
+        dr == dc
+    }
+
+    pub fn which_direction(&self, other: &Self) -> Direction {
+        let dr = (self.orow as isize - other.orow as isize).abs();
+        let dc = (self.ocol as isize - other.ocol as isize).abs();
+
+        if dr == 0 && dc > 0 {
+            return if self.orow < other.orow { Up } else { Down };
+        } else if dr > 0 && dc == 0 {
+            return if self.ocol < other.ocol { Left } else { Right };
+        } else if dr == dc {
+            return if self.orow < other.orow && self.ocol < other.ocol {
+                DownRight
+            } else if self.orow < other.orow && self.ocol > other.ocol {
+                DownLeft
+            } else if self.orow > other.orow && self.ocol < other.ocol {
+                UpRight
+            } else {
+                UpLeft
+            };
+        }
+
+        Other
+    }
+
+    /*
     // Must have at least one other!
     pub fn nearest(&self, other: &Shapes) -> Self {
         let dself = self.euclidian();
@@ -606,20 +710,20 @@ impl Shape {
         let mut pos: &Self = &other.shapes[0];
 
         for s in &other.shapes {
-            if self.orow > s.orow + 1 && self.ocol > s.ocol + 1 {
+            //if self.orow > s.orow + 1 && self.ocol > s.ocol + 1 {
                 let dist = dself - s.euclidian();
+println!("{:?}", dist.abs());
 
-                if dist < min {
+                if dist.abs() < min {
                     min = dist;
                     pos = s;
                 }
-            }
+            //}
         }
 
         pos.clone()
     }
 
-    /*
     pub fn touching(&self, other: &Shape) -> bool {
         let l_tlx = self.ox;
         let l_lty = self.oy;
@@ -858,14 +962,44 @@ impl Shape {
         Same
     }
 
+    pub fn find_equals(&self, shapes: &Shapes) -> Shape {
+        for s in shapes.shapes.iter() {
+            if s.equals(self) == Same {
+                return s.clone();
+            }
+        }
+
+        Shape::trivial()
+    }
+
     // Same position
     pub fn equal_position(&self, other: &Self) -> bool {
         self.orow == other.orow && self.ocol == other.ocol
     }
 
+    pub fn find_equal_position(&self, shapes: &Shapes) -> Shape {
+        for s in shapes.shapes.iter() {
+            if s.equal_position(self) {
+                return s.clone();
+            }
+        }
+
+        Shape::trivial()
+    }
+
     // Same footprint
     pub fn equal_footprint(&self, other: &Self) -> bool {
         self.cells.columns == other.cells.columns && self.cells.rows == other.cells.rows
+    }
+
+    pub fn find_equal_footprint(&self, shapes: &Shapes) -> Shape {
+        for s in shapes.shapes.iter() {
+            if s.equal_footprint(self) {
+                return s.clone();
+            }
+        }
+
+        Shape::trivial()
     }
 
     // Same shape
@@ -881,6 +1015,16 @@ impl Shape {
         }
 
         true
+    }
+
+    pub fn find_equal_shape(&self, shapes: &Shapes) -> Shape {
+        for s in shapes.shapes.iter() {
+            if s.equal_shape(self) {
+                return s.clone();
+            }
+        }
+
+        Shape::trivial()
     }
 
     pub fn show_summary(&self) {
@@ -959,31 +1103,31 @@ impl Shape {
     }
 
     pub fn above(&self, other: &Self) -> bool {
-        let (sr, sc) = self.centre_of_exact();
-        let (or, oc) = other.centre_of_exact();
+        let (sr, _) = self.centre_of_exact();
+        let (or, _) = other.centre_of_exact();
         
-        sr < or && (sr - or).abs() > (sc - oc).abs()
+        sr > or
     }
 
     pub fn below(&self, other: &Self) -> bool {
-        let (sr, sc) = self.centre_of_exact();
-        let (or, oc) = other.centre_of_exact();
+        let (sr, _) = self.centre_of_exact();
+        let (or, _) = other.centre_of_exact();
         
-        sr > or && (sr - or).abs() > (sc - oc).abs()
+        sr < or
     }
 
     pub fn right(&self, other: &Self) -> bool {
-        let (sr, sc) = self.centre_of_exact();
-        let (or, oc) = other.centre_of_exact();
+        let (_, sc) = self.centre_of_exact();
+        let (_, oc) = other.centre_of_exact();
         
-        sc < oc && (sr - or).abs() < (sc - oc).abs()
+        sc < oc
     }
 
     pub fn left(&self, other: &Self) -> bool {
-        let (sr, sc) = self.centre_of_exact();
-        let (or, oc) = other.centre_of_exact();
+        let (_, sc) = self.centre_of_exact();
+        let (_, oc) = other.centre_of_exact();
         
-        sc > oc && (sr - or).abs() < (sc - oc).abs()
+        sc > oc
     }
 
     pub fn diag(&self, other: &Self) -> bool {
@@ -1073,6 +1217,145 @@ impl Shape {
         s.len()
     }
 
+    pub fn find_layers(&self) -> (usize, Colour, Vec<Direction>) {
+        let rows = self.cells.rows;
+        let cols = self.cells.columns;
+        let mut depth = 0;
+        let mut colour = NoColour;
+        let mut dirs: Vec<Direction> = Vec::new();
+
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour != Black {
+                if colour == NoColour {
+                    colour = cell.colour;
+                } else if colour != NoColour && cell.colour != colour {
+                    break;
+                }
+            }
+
+            let mut ldepth = 0;
+
+            if r == 0 && c == cols / 2 {
+                for rr in 0 .. rows {
+                    if self.cells[(rr,c)].colour == colour {
+                        ldepth += 1;
+                        if !dirs.contains(&Up) { dirs.push(Up); }
+                    } else {
+                        break;
+                    }
+                }
+            } else if r == rows - 1 && c == cols / 2 {
+                for rr in (0 .. rows).rev() {
+                    if self.cells[(rr,c)].colour == colour {
+                        ldepth += 1;
+                        if !dirs.contains(&Down) { dirs.push(Down); }
+                    } else {
+                        break;
+                    }
+                }
+            } else if c == 0 && r == rows / 2 {
+                for cc in 0 .. cols {
+                    if self.cells[(r,cc)].colour == colour {
+                        ldepth += 1;
+                        if !dirs.contains(&Left) { dirs.push(Left); }
+                    } else {
+                        break;
+                    }
+                }
+            } else if c == cols - 1 && r == rows / 2 {
+                for cc in (0 .. cols).rev() {
+                    if self.cells[(r,cc)].colour == colour {
+                        ldepth += 1;
+                        if !dirs.contains(&Right) { dirs.push(Right); }
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            if ldepth > 0 {
+                if depth == 0 && ldepth > 0 {
+                    depth = ldepth;
+                } else if ldepth != depth {
+                    depth = 0;
+                    dirs = Vec::new();
+                    break;
+                }
+            }
+        }
+
+        (depth, colour, dirs)
+    }
+
+    // see 40f6cd08.todo
+    pub fn paint_layers_mut(&mut self, indent: usize, depth: usize, colour: Colour, dirs: Vec<Direction>) {
+        let rows = self.cells.rows;
+        let cols = self.cells.columns;
+        //let bg = self.colour;
+        let bg = Black;
+
+        for dir in dirs.iter() {
+            match dir {
+                Up => {
+                    for r in indent .. indent + depth {
+                        for c in indent .. cols {
+                            if self.cells[(r, c)].colour == bg {
+                                self.cells[(r, c)].colour = colour;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                },
+                Down => {
+                    for r in rows - indent - depth .. rows - indent {
+                        for c in indent .. cols {
+                            if self.cells[(r, c)].colour == bg {
+                                self.cells[(r, c)].colour = colour;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                },
+                Left => {
+                    for r in indent .. rows  {
+                        for c in indent .. indent + depth {
+                            if self.cells[(r, c)].colour == bg {
+                                self.cells[(r, c)].colour = colour;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                },
+                Right => {
+println!("--- {} {}", indent, depth);
+                    for r in indent .. rows {
+                        //for c in 0 .. cols - indent {
+                        for c in cols - indent - depth .. cols - indent {
+                        //for c in indent + depth .. cols {
+                        //for c in (0 .. cols  - indent - depth).rev() {
+                        //for c in (indent + depth .. cols).rev() {
+                        //for c in 0 .. cols - indent - depth {
+                            if self.cells[(r, c)].colour == bg {
+                                self.cells[(r, c)].colour = colour;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                },
+                _ => todo!()
+            }
+        }
+//self.show();
+    }
+
+    pub fn cell_colours(&self) -> Vec<Colour>  {
+        self.cell_colour_cnt_map().keys().map(|c| *c).collect()
+    }
+
     pub fn cell_colour_cnt_map(&self) -> BTreeMap<Colour, usize>  {
         let mut h: BTreeMap<Colour, usize> = BTreeMap::new();
 
@@ -1111,7 +1394,7 @@ impl Shape {
             .map(|(col, cnt)| (Colour::from_usize(*col), *cnt));
 
         match pair {
-            None => (NoColour, 0),
+            None => (Black, 0),
             Some((colour, cnt)) => (colour, cnt)
         }
     }
@@ -1175,6 +1458,14 @@ impl Shape {
         let side = self.cells.rows.max(self.cells.columns);
 
         (tlr.min(tlc), tlr.min(tlc), side, if side % 2 == 1 { 1 } else { 4 })
+    }
+
+    pub fn is_larger(&self, other: &Self) -> bool {
+        self.size() >= other.size()
+    }
+
+    pub fn is_smaller(&self, other: &Self) -> bool {
+        self.size() <= other.size()
     }
 
     pub fn larger(&self, other: &Self) -> Self {
@@ -1687,6 +1978,14 @@ println!("<< {tlr}, {tlc}, {brr}, {brc} : {side}");
         self.cells.rows == 1 && self.cells.columns > 0 || self.cells.rows > 1 && self.cells.columns == 1 
     }
 
+    pub fn is_horizontal_line(&self) -> bool {
+        self.cells.columns > 1 && self.cells.rows == 1 
+    }
+
+    pub fn is_vertical_line(&self) -> bool {
+       self.cells.rows > 1 && self.cells.columns == 1 
+    }
+
     pub fn is_square(&self) -> bool {
         self.cells.rows == self.cells.columns
     }
@@ -1866,7 +2165,7 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         self.has_border_hole(false, &|r, c, rows, cols| r == 0 || c == 0 || r == rows - 1 || c == cols - 1)
     }
 
-    pub fn has_hole(&self) -> bool {
+    pub fn is_hollow(&self) -> bool {
         self.has_border_hole(true, &|r, c, rows, cols| r == 0 || c == 0 || r == rows - 1 || c == cols - 1)
     }
 
@@ -1875,6 +2174,9 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     }
 
     pub fn has_open_hole_top(&self) -> bool {
+        if self.is_hollow() {
+            return false;
+        }
         self.has_border_hole(false, &|r, c, rows, cols| c == 0 || r == rows - 1 || c == cols - 1)
     }
 
@@ -1883,6 +2185,9 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     }
 
     pub fn has_open_hole_bottom(&self) -> bool {
+        if self.is_hollow() {
+            return false;
+        }
         self.has_border_hole(false, &|r, c, _rows, cols| r == 0 || c == 0 || c == cols - 1)
     }
 
@@ -1891,6 +2196,9 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     }
 
     pub fn has_open_hole_left(&self) -> bool {
+        if self.is_hollow() {
+            return false;
+        }
         self.has_border_hole(false, &|r, c, rows, cols| r == 0 || r == rows - 1 || c == cols - 1)
     }
 
@@ -1899,7 +2207,26 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
     }
 
     pub fn has_open_hole_right(&self) -> bool {
+        if self.is_hollow() {
+            return false;
+        }
         self.has_border_hole(false, &|r, c, rows, _cols| r == 0 || c == 0 || r == rows - 1)
+    }
+
+    pub fn find_a_border_break(&self) -> (Direction, usize, usize) {
+        for ((r, c) , cell) in self.cells.items() {
+            if r == 0 && cell.colour == Black { 
+                return (Up, cell.row, cell.col);
+            } else if c == self.cells.columns - 1 && cell.colour == Black {
+                return (Right, cell.row, cell.col);
+            } else if r == self.cells.rows - 1 && cell.colour == Black { 
+                return (Down, cell.row, cell.col);
+            } else if c == 0 && cell.colour == Black {
+                return (Left, cell.row, cell.col);
+            }
+        }
+
+        (Other, 0, 0)
     }
 
     pub fn has_border_break(&self) -> (Direction, usize, usize) {
@@ -2027,9 +2354,9 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
 
     pub fn can_contain(&self, other: &Self) -> bool {
         let (s, o) = if self.size() > other.size() { (self, other) } else { (other, self) };
-        if s.width() < 3 || s.height() < 3 || s.width() < o.width() + 2 || s.height() < o.height() + 2 { return false };
+        if s.width() < 2 || s.height() < 2 || s.width() < o.width() + 1 || s.height() < o.height() + 1 { return false };
         for (r, c) in other.cells.keys() {
-            if r != 0 && c != 0 && r < s.cells.rows && r < s.cells.columns && s.cells[(r, c)].colour != Black {
+            if r != 0 && c != 0 && r <= s.cells.rows && r <= s.cells.columns && s.cells[(r, c)].colour != Black {
                 return false;
             }
         }
@@ -2057,11 +2384,67 @@ println!("{x}/{y} {}/{} {} {}/{}", xf, yf, factor, dx, dy);
         other.is_contained(self)
     }
 
-    pub fn adjacent(&self, other: &Self) -> bool {
-        self.orow + self.cells.columns + 1 == other.orow ||
-        self.ocol + self.cells.rows + 1 == other.ocol ||
-        other.orow + other.cells.columns + 1 == self.orow ||
-        other.ocol + other.cells.rows + 1 == self.ocol
+    pub fn nest_mut(&mut self, n: usize, colour: Colour) {
+        if self.cells.rows <= n || self.cells.columns <= n {
+            return;
+        }
+        for r in n .. self.cells.rows - n {
+            for c in n .. self.cells.columns - n {
+                self.cells[(r,c)].colour = colour;
+            }
+        }
+    }
+
+    // TODO: 50f325b5
+    pub fn patch_in_shape(&self, other: &Self) -> (usize, usize) {
+        for ch in self.cells.chunks(self.cells.columns) {
+            //w.iter().for_each(|ch| print!("{:?},", ch.colour));
+            let chr = ch.iter().map(|ch| format!("{:?}", ch.colour)).collect::<Vec<_>>().join(",");
+println!("{}", chr);
+            let mut iter = other.cells.iter();
+            let c = iter.position(|c| { println!("{:?} {:?}", c[0].colour, ch[0].colour); c[0].colour != ch[0].colour});
+            let c2 = iter.next();
+            let c3 = iter.next();
+    //println!("{:?},{:?},{:?}", c.unwrap()[0].colour, c2.colour, c3.colour);
+    //println!("{:?}", c);
+println!("{:?},{:?},{:?}", c, c2, c3);
+        }
+        println!();
+        (0, 0)
+    }
+
+    pub fn adjacent_r_or_c(&self, other: &Self) -> bool {
+        self.orow + self.cells.rows == other.orow ||
+        self.ocol + self.cells.columns == other.ocol ||
+        other.orow + other.cells.rows == self.orow ||
+        other.ocol + other.cells.columns == self.ocol
+    }
+
+    // TODO: improave? % touching...
+    pub fn touching(&self, other: &Self) -> bool {
+        let sr = self.orow;
+        let sc = self.ocol;
+        let or = other.orow;
+        let oc = other.ocol;
+        let srl = self.cells.rows;
+        let scl = self.cells.columns;
+        let orl = other.cells.rows;
+        let ocl = other.cells.columns;
+
+        sr + srl == or && oc <= sc && oc + ocl >= sc + scl ||
+        sc + scl == oc && or >= sr && or + orl <= sr + srl ||
+        or + orl == sr && sc <= oc && sc + scl >= oc + ocl ||
+        oc + ocl == sc && sr >= or && sr + srl <= or + orl
+    }
+
+    pub fn find_touching(&self, shapes: &Shapes) -> Shape {
+        for s in shapes.shapes.iter() {
+            if self.touching(s) {
+                return s.clone();
+            }
+        }
+
+        Shape::trivial()
     }
 
     pub fn single_colour(&self) -> Option<Colour> {
@@ -3064,56 +3447,7 @@ println!("4");
         let mut rc: Vec<(usize, usize)> = Vec::new();
 
         for (r, c) in shape.cells.keys() {
-            let mut cnt = 0;
-
-            if r > 0 && r < rows && c > 0 && c < cols {
-                if shape.cells[(r-1,c)].colour == colour { cnt += 1 };
-                if shape.cells[(r,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r-1,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r+1,c)].colour == colour { cnt += 1 };
-                if shape.cells[(r,c+1)].colour == colour { cnt += 1 };
-                if shape.cells[(r+1,c+1)].colour == colour { cnt += 1 };
-                if shape.cells[(r+1,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r-1,c+1)].colour == colour { cnt += 1 };
-            } else if r == 0 && c == 0 {
-                cnt += 5;
-                if r == rows || shape.cells[(r+1,c)].colour == colour { cnt += 1 };
-                if c == cols || shape.cells[(r,c+1)].colour == colour { cnt += 1 };
-                if r == rows || c == cols || shape.cells[(r+1,c+1)].colour == colour { cnt += 1 };
-            } else if r == 0 {
-                cnt += 3;
-                if shape.cells[(r,c-1)].colour == colour { cnt += 1 };
-                if r == rows || shape.cells[(r+1,c)].colour == colour { cnt += 1 };
-                if c == cols || shape.cells[(r,c+1)].colour == colour { cnt += 1 };
-                if r == rows || c == cols || shape.cells[(r+1,c+1)].colour == colour { cnt += 1 };
-                if r == rows || shape.cells[(r+1,c-1)].colour == colour { cnt += 1 };
-            } else if c == 0 {
-                cnt += 3;
-                if shape.cells[(r-1,c)].colour == colour { cnt += 1 };
-                if r == rows || shape.cells[(r+1,c)].colour == colour { cnt += 1 };
-                if c == cols || shape.cells[(r,c+1)].colour == colour { cnt += 1 };
-                if r == rows || c == cols || shape.cells[(r+1,c+1)].colour == colour { cnt += 1 };
-                if c == cols || shape.cells[(r-1,c+1)].colour == colour { cnt += 1 };
-            } else if r == rows && c == cols {
-                cnt += 5;
-                if shape.cells[(r-1,c)].colour == colour { cnt += 1 };
-                if shape.cells[(r,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r-1,c-1)].colour == colour { cnt += 1 };
-            } else if r == rows {
-                cnt += 3;
-                if shape.cells[(r-1,c)].colour == colour { cnt += 1 };
-                if shape.cells[(r,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r-1,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r,c+1)].colour == colour { cnt += 1 };
-                if shape.cells[(r-1,c+1)].colour == colour { cnt += 1 };
-            } else if c == cols {
-                cnt += 3;
-                if shape.cells[(r-1,c)].colour == colour { cnt += 1 };
-                if shape.cells[(r,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r-1,c-1)].colour == colour { cnt += 1 };
-                if shape.cells[(r+1,c)].colour == colour { cnt += 1 };
-                if shape.cells[(r+1,c-1)].colour == colour { cnt += 1 };
-            }
+            let (cnt, _) = surround_cnt(&shape.cells, r, c, colour);
 
             if cnt == 8 {
                 rc.push((r, c));
@@ -3257,6 +3591,17 @@ println!("4");
         }
     }
 
+    pub fn draw_line(&self, other: &Self, colour: Colour) -> Shape {
+        let s1 = self.centre_of();
+        let s2 = other.centre_of();
+
+//println!("--- {s1:?} -> {s2:?}");
+        let (r, c) = if s1 < s2 { s1 } else { s2 };
+        let (rl, cl) = ((s1.0.max(s2.0) - s1.0.min(s2.0)).max(1), (s1.1.max(s2.1) - s1.1.min(s2.1)).max(1));
+
+        Shape::new_sized_coloured_position(r, c, rl, cl, colour)
+    }
+
     pub fn fill_lines(&self, colour: Colour) -> Self {
         let mut s = self.clone();
         let mut rows: BTreeMap<usize, usize> = BTreeMap::new();
@@ -3354,7 +3699,7 @@ println!("4");
             self.cats.insert(ShapeCategory::SingleCell);
         }
         */
-        if has_border && self.has_hole() {
+        if has_border && self.is_hollow() {
             self.cats.insert(ShapeCategory::HasHole);
         }
         if !has_border && self.cells.rows == self.cells.columns {
@@ -3554,6 +3899,50 @@ println!("4");
         }
         if pixels >= 4 {
             self.cells[(rows - 1, cols - 1)].colour = colour;
+        }
+    }
+
+    pub fn pixel_position(&self, min_colour: Colour) -> Direction {
+        if self.colour != Mixed {
+            return Other;
+        }
+        let hr = self.cells.rows / 2;
+        let hc = self.cells.columns / 2;
+        let mut left = 0;
+        let mut right = 0;
+        let mut top = 0;
+        let mut bottom = 0;
+
+        for ((r, c), cell) in self.cells.items() {
+            if cell.colour == min_colour {
+                if r == hr { left += 1; right += 1; }
+                else if r < hr { top += 1 }
+                else { bottom += 1 }
+
+                if c == hc { top += 1; bottom += 1; }
+                else if c < hr { left += 1 }
+                else { right += 1 }
+            }
+        }
+
+        if top == bottom && top == left && top == right {
+            Middle 
+        } else if top == left && bottom == right && top > bottom {
+            UpLeft
+        } else if bottom == left && top == right && bottom > top {
+            DownLeft
+        } else if bottom == right && top < bottom && left < right {
+            DownRight
+        } else if top == right && top > bottom && right > left {
+            UpRight
+        } else if top > bottom && top > left && top > right {
+            Up
+        } else if right > top && right > bottom && right > left {
+            Right
+        } else if bottom > top && bottom > left && bottom > right {
+            Down
+        } else {
+            Left
         }
     }
 
@@ -3898,6 +4287,12 @@ impl Shapes {
         Self { nrows: 0, ncols: 0, colour: NoColour, shapes: Vec::new() }
     }
 
+    pub const fn trivial() -> Self {
+        const SHAPES: Vec<Shape> = Vec::new();
+
+        Self { nrows: 0, ncols: 0, colour: NoColour, shapes: SHAPES }
+    }
+
     pub fn new_sized(nrows: usize, ncols: usize) -> Self {
         Self { nrows, ncols, colour: NoColour, shapes: Vec::new() }
     }
@@ -3946,18 +4341,44 @@ impl Shapes {
         new_shapes
     }
 
+    pub fn clone_base(&self) -> Self {
+        let mut this = Self::new_sized(self.nrows, self.ncols);
+
+        this.colour = self.colour;
+
+        this
+    }
+
     pub fn merge_mut(&mut self, other: &Self) {
         for s in &other.shapes {
             self.shapes.push(s.clone());
         }
     }
 
+    /*
+       TODO 3490cc26
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Pos(pub usize, pub usize);
+pub struct Successor {
+    pub pos: Pos,
+    pub cost: usize,
+}
+impl PartialEq<(Pos, usize)> for Successor {
+    fn eq(&self, other: &(Pos, usize)) -> bool {
+        self.pos == other.0 && self.cost == other.1
+    }
+}
+
+    // Straight line nearest successors
+    pub fn get_sln_successors(&self, r: usize, c: usize) -> Vec<Successor> {
+        Vec
+    }
+    */
+
     // Expensive : fd096ab6
     pub fn join_shapes_same_colour(&self) -> Self {
-        let mut shapes = self.clone();
         let mut done: Vec<Shape> = Vec::new();
-
-        shapes.shapes = Vec::new();
+        let mut shapes = self.clone_base();
 
         for s1 in &self.shapes {
             for s2 in &self.shapes {
@@ -4012,6 +4433,26 @@ impl Shapes {
                    ss.entry(s.clone()).and_modify(|v| v.push(si.clone())).or_insert(vec![si.clone()]);
                 }
             }
+        }
+
+        ss
+    }
+
+    pub fn coords_to_shape(&self) -> BTreeMap<(usize, usize), Shape> {
+        let mut cts: BTreeMap<(usize, usize), Shape> = BTreeMap::new();
+
+        for s in self.shapes.iter() {
+            cts.insert((s.orow, s.ocol), s.clone());
+        }
+
+        cts
+    }
+
+    pub fn centre_of(&self) -> BTreeMap<(usize, usize), Shape> {
+        let mut ss: BTreeMap<(usize, usize), Shape> = BTreeMap::new();
+
+        for s in self.shapes.iter() {
+            ss.insert(s.centre_of(), s.clone());
         }
 
         ss
@@ -4167,9 +4608,7 @@ impl Shapes {
     }
 
     pub fn get_pixels(&self) -> Shapes {
-        let mut shapes = self.clone();
-
-        shapes.shapes = Vec::new();
+        let mut shapes = self.clone_base();
 
         for s in self.shapes.iter() {
             if s.is_pixel() {
@@ -4240,7 +4679,7 @@ impl Shapes {
             return None;
         }
 
-        if h.iter().filter(|(_,&v)| v == 1).count() == 1 {
+        if h.iter().filter(|&(_,&v)| v == 1).count() == 1 {
             for (k, v) in &h {
                 if *v == 1 {
                     return Some(*k);
@@ -4325,7 +4764,7 @@ impl Shapes {
             return None;
         }
 
-        if h.iter().filter(|(_,&v)| v == 1).count() == 1 {
+        if h.iter().filter(|&(_,&v)| v == 1).count() == 1 {
             for (k, v) in &h {
                 if *v == 1 {
                     return Some(*k);
@@ -4716,24 +5155,24 @@ println!("{m:?}");
     }
     */
 
-    pub fn pixels_in_shapes(&self) -> bool {
+    pub fn pixels_in_shapes(&self, shape: &Shape) -> Vec<Shape> {
+        let mut shapes: Vec<Shape> = Vec::new();
         let pixels: Vec<&Shape> = self.shapes.iter()
             .filter(|s| s.is_pixel())
             .collect();
             
         if pixels.is_empty() {
-            return false;
+            return shapes;
         }
 
-        for pix in pixels.iter() {
-            for s in self.shapes.iter() {
-                if !s.is_pixel() && pix.contained_by(s) {
-                    return true;
-                }
+
+        for pix in pixels.into_iter() {
+            if pix.contained_by(&shape) {
+                shapes.push(pix.clone());
             }
         }
 
-        false
+        shapes
     }
 
     fn overlay_shapes(&self, same: bool) -> bool {
@@ -5075,6 +5514,7 @@ println!("{m:?}");
              Shapes::new_shapes_sized(self.nrows, self.ncols, &shapes)))
     }
 
+    /*
     pub fn position_centres(&self, positions: &Self) -> Self {
         //if positions.shapes.is_empty() || self.shapes[0].cells.rows <= 1 || (self.shapes[0].cells.rows > 1 && self.shapes[0].cells.rows != self.shapes[0].cells.columns) {
         if positions.shapes.is_empty() || self.shapes[0].cells.rows <= 1 || self.shapes[0].cells.rows != self.shapes[0].cells.columns {
@@ -5106,7 +5546,6 @@ println!("{m:?}");
         nps
     }
 
-    /*
     pub fn categorise {
         self.categorise_shapes();
         categorise_io_edges(in_shapes: &mut Shapes, out_shapes: &Shapes) {
@@ -5121,28 +5560,6 @@ println!("{m:?}");
             for s2 in self.shapes.iter() {
                 if s1.contained_by(s2) {
                     pairs.insert(s2.clone(), s1.clone());
-
-                    break;
-                }
-            }
-        }
-
-        pairs
-    }
-
-    pub fn equal_pairs(&self) -> BTreeMap<Shape, Shape> {
-        let mut posn: Vec<(usize, usize)> = Vec::new();
-        let mut pairs: BTreeMap<Shape, Shape> = BTreeMap::new();
-
-        for s1 in self.shapes.iter() {
-            for s2 in self.shapes.iter() {
-                //if s1.dimensions() == s2.dimensions() && s1.colour == s2.colour  && (s1.orow != s2.orow || s1.ocol != s2.ocol) {
-                //if s1.dimensions() == s2.dimensions() && s1.colour == s2.colour  && (s1.orow != s2.orow && s1.ocol != s2.ocol) && !posn.contains(&(s1.orow, s2.ocol)) {
-                //if s1.dimensions() == s2.dimensions() && s1.colour == s2.colour  && !posn.contains(&(s1.orow, s2.ocol)) {
-                if s1.dimensions() == s2.dimensions() && s1.colour == s2.colour && !posn.contains(&(s1.orow, s1.ocol)) && !posn.contains(&(s2.orow, s2.ocol)) {
-                    pairs.insert(s2.clone(), s1.clone());
-                    posn.push((s1.orow, s1.ocol));
-                    posn.push((s2.orow, s2.ocol));
 
                     break;
                 }
@@ -5230,10 +5647,8 @@ println!("{m:?}");
     }
 
     pub fn split_size(&self, sz: usize) -> Self {
-        let mut shapes = self.clone();
         let (mr, mc) = self.min_size(sz);
-
-        shapes.shapes = Vec::new();
+        let mut shapes = self.clone_base();
 
         for s in self.shapes.iter() {
             if s.size() > sz && s.cells.rows >= mr && s.cells.columns >= mc  {
@@ -5295,9 +5710,7 @@ println!("{m:?}");
     }
 
     pub fn ignore_pixels(&self) -> Self {
-        let mut ss = self.clone();
-
-        ss.shapes = Vec::new();
+        let mut ss = self.clone_base();
 
         for s in &self.shapes {
             if s.size() > 1 {
@@ -5309,9 +5722,7 @@ println!("{m:?}");
     }
 
     pub fn de_subshape(&self) -> Shapes {
-        let mut ss = self.clone();
-
-        ss.shapes = Vec::new();
+        let mut ss = self.clone_base();
 
         for s in &self.shapes {
             s.de_subshape(&mut ss);
@@ -5440,7 +5851,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
             *h.entry(s.clone()).or_insert(0) += 1;
         }
 
-        h.iter().filter(|(_, &cnt)| cnt == 1).map(|(s, _)| s.clone()).collect()
+        h.iter().filter(|&(_, &cnt)| cnt == 1).map(|(s, _)| s.clone()).collect()
     }
 
     pub fn remove(&mut self, shape: &Shape) {
@@ -5509,7 +5920,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
         let mut holes = Self::new();
 
         for s in &self.shapes {
-            if s.has_hole() {
+            if s.is_hollow() {
                 holes.shapes.push(s.clone());
             }
         }
@@ -5527,9 +5938,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
     */
 
     pub fn trim_grid(&self) -> Self {
-        let mut trimmed = self.clone();
-
-        trimmed.shapes = Vec::new();
+        let mut trimmed = self.clone_base();
 
         for s in self.shapes.iter() {
             if s.orow + s.cells.rows > self.nrows || s.ocol + s.cells.columns > self.ncols {
