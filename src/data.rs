@@ -81,12 +81,29 @@ pub fn dir(dir: &str) -> Vec<String> {
 }
 
 pub fn load_files(data: &str) -> BTreeMap<String, Data> {
+    /*
     let prefix = if std::path::Path::new("input/arc-prize-2024").is_dir() {
         "input/arc-prize-2024/arc-agi"
+    } else if std::path::Path::new("kaggle/input").is_dir() {
+        "kaggle/input/arc-prize-2025/arc-agi"
+    } else {
+        "/kaggle/input/arc-prize-2025/arc-agi"
+    */
+    /*
+    let prefix = if std::path::Path::new("input/arc-prize-2025").is_dir() {
+        "input/arc-prize-2025/arc-agi"
     } else if std::path::Path::new("kaggle/working").is_dir() {
         "kaggle/working/arc-agi"
     } else {
         "/kaggle/working/arc-agi"
+    };
+    */
+    let prefix = if std::path::Path::new("input/arc-prize-2025").is_dir() {
+        "input/arc-prize-2025/arc-agi"
+    } else if std::path::Path::new("/kaggle/input/arc-prize-2025").is_dir() {
+        "/kaggle/input/arc-prize-2025/arc-agi"
+    } else {
+        "/kaggle/input/arc-prize-2025/arc-agi"
     };
 //eprintln!("#### {prefix}");
     let training_suffix = "challenges.json";

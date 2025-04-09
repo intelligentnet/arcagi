@@ -1,5 +1,5 @@
 # arcagi
-A Rust attempt at the ARC-AGI prize 2024
+A Rust attempt at the ARC-AGI prize 2025
 
 WARNING:
 -----
@@ -8,6 +8,15 @@ moment it is a set of experiments to guage what works well and what does not.
 It is perhaps 30% complete and will answer about 40% of the examples given.
 
 If you use this code as part of a Kaggle submission, or in any other way, then please give credit where credit is due.
+
+New Baseline for v2 of ARC-AGI
+------------------------------
+
+This is cleaned up code that does not throw any errors on the new 2025 version.
+It will achieve 281 correct training examples, but unfortunately only 2 correct
+evaluation answers. There is a lot of work to be done! Identifying and 
+composing training set code to be used to solve evaluation set problems is 
+going to be the biggest challenge.
 
 Background
 ----------
@@ -45,7 +54,7 @@ generated was poor quality and time consuming to debug (Rust is probably not
 the best target for code generation given it's memory management as simple
 next token prediction does not understand that).
 
-See: https://www.kaggle.com/competitions/arc-prize-2024
+See: https://www.kaggle.com/competitions/arc-prize-2025
 
 See inet submission.
 
@@ -56,6 +65,8 @@ for testing individual cases. A typical call to run the training set would be
 Kaggle notebook
 ---------------
 
+For V1 (2024) version) of this challenge this code was used to run Rust from the notebook.
+
 ```
 from cffi import FFI
 ffi = FFI()
@@ -65,20 +76,26 @@ a = rust.test();
 print(a)
 ```
 
+This does not seem to work in V2 (2025) so a simple wrapper is now used to
+call it from the command line wrapped in C. 
+
+```
+!echo 'int main() { test(); }' > /kaggle/working/arcagi.c
+!gcc -O -o /kaggle/working/arcagi /kaggle/working/arcagi.c /kaggle/input/release/libarc_agi.so
+!LD_LIBRARY_PATH=/kaggle/input/release /kaggle/working/arcagi -larcagi
+```
+Ignore the warning.
+
+Note 
+----
+
+A shared object file call libarcagi.so is required in a 'release' directory
+created by uploading a 'model'.
+
 If you wish to use this for a Kaggle submission, then please ask the author
 who will be happy to share a Kaggle shared object. Credit is expected of course..
-
-NOTE
-----
 
 To compile the above for kaggle a docker image needs to be created and the .so
 file uploaded and referenced, somewhat tedious. It will run locally for public
 data test with cargo as normal. A release version should run in less that a
 second on most machines, this will change as more cases are completed.
-
-22 December 2024 - After o3 'Success'
--------------------------------------
-
-The three o3 unsolved puzzles are solved by this implementation. c6e1b8da, 0d87d2a6 and b457fec5.
-
-I'm not happy with 0d87d2a6 as the extending arm should only change other shapes it crosses, if and only if it goes through them, not a near miss. That's the 'best' human interpretation! I appreciate 2 attempts are allowed, though I don't think that should be necessary, the interpretation should be deterministic given the experimental examples!!! Humans solve IQ tests analytically, not by thinking, 'Ah, this is ambiguous, these are the choices'. Or guessing, though as a last resort we have all done that, but it's not repeatable and not appropriate here!  Can we remove this 2 guess approach please for version 2.

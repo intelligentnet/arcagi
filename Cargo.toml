@@ -1,7 +1,7 @@
 [package]
 name = "arc-agi"
 version = "0.1.6"
-edition = "2021"
+edition = "2024"
 authors = ["Chris Dipple <chris@intelligent-net.co.uk>"]
 license = "MIT OR Apache-2.0"
 description = "ARC-AGI submission"
@@ -18,7 +18,7 @@ serde_derive = "^1"
 #stemplate = "^0.1"
 num-traits = "^0.2.19"
 array_tool = "^1.0.3"
-pathfinding = "^4.10.0"
+pathfinding = "^4.14.0"
 itertools  = "^0.14"
 crc = "^3.2.1"
 peak_alloc = "^0.2.1"
@@ -27,6 +27,8 @@ strum_macros = "^0.26.4"
 #regex = "^1.10"
 #peg = "^0.8"
 
+## Use the code below for the binary C wrapper code
 #[lib]
 #name = "arc_agi"
-#crate-type = ["rlib", "dylib"]
+#crate-type = ["cdylib"]      # Creates dynamic lib OR
+##crate-type = ["staticlib"] # Creates static lib

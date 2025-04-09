@@ -922,7 +922,7 @@ impl Examples {
                 return Grid::trivial();
             } else {
                 for (c1, c2) in g.cells.values().zip(grid.cells.values_mut()) {
-                    c2.colour = c1.colour.and(&c2.colour);
+                    c2.colour = c1.colour.and(c2.colour);
                 }
             }
         }

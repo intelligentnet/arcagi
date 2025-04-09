@@ -1395,9 +1395,11 @@ impl Grid {
 
         for r in 0 .. rows {
             for c in 0 .. cols {
-                grid.cells[(r,c)].row = r;
-                grid.cells[(r,c)].col = c;
-                grid.cells[(r,c)].colour = self.cells[(r,c)].colour;
+                if r < grid.cells.rows && c < grid.cells.columns {
+                    grid.cells[(r,c)].row = r;
+                    grid.cells[(r,c)].col = c;
+                    grid.cells[(r,c)].colour = self.cells[(r,c)].colour;
+                }
             }
         }
 
@@ -4494,10 +4496,10 @@ println!("BG not Black {:?}", s.colour);
 
     // Expensive so only call when sure
     pub fn solve(&mut self, pred: &dyn Fn(&Self, usize, usize, Colour) -> bool) -> bool {
-        self.solve_depth(pred, 0)
+        self.solve_depth(pred, 6)
     }
 
-    fn solve_depth(&mut self, pred: &dyn Fn(&Self, usize, usize, Colour) -> bool, depth: usize) -> bool {
+    pub fn solve_depth(&mut self, pred: &dyn Fn(&Self, usize, usize, Colour) -> bool, depth: usize) -> bool {
         fn find_empty_cell(grid: &Grid) -> Option<(usize, usize)> {
             for ((r, c), cell) in grid.cells.items() {
                 if cell.colour == Black {
@@ -4509,7 +4511,7 @@ println!("BG not Black {:?}", s.colour);
         }
 
         // Might be a bit too conmservative on recursive depth!
-        if self.cells.rows != self.cells.columns || self.cells.rows > 9 || depth > 6 {
+        if self.cells.rows != self.cells.columns || self.cells.rows > 9 || depth == 0 {
             return false;
         }
 
@@ -4520,7 +4522,7 @@ println!("BG not Black {:?}", s.colour);
                 if pred(self, r, c, colour) {
                     self.cells[(r,c)].colour = colour;
 
-                    if self.solve_depth(pred, depth + 1) {
+                    if self.solve_depth(pred, depth - 1) {
                         return true;
                     }
 

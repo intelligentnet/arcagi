@@ -105,6 +105,10 @@ impl Shape {
         //let cats: BTreeSet<ShapeCategory> = BTreeSet::new();
         let cells = Self::cell_category(cells);
 
+        if cells.rows == 0 || cells.columns == 0 {
+            return Shape::trivial();
+        }
+
         let orow = cells[(0,0)].row;
         let ocol = cells[(0,0)].col;
         let res = Self { orow, ocol, colour, cells };
@@ -278,6 +282,64 @@ impl Shape {
         let shape = shape.fill(&shape.rotated_180());
 
         shape.fill(&shape.rotated_270())
+    }
+
+    pub fn col_symmetric_mut(&self, shapes: &mut Shapes) {
+        let cols = self.cells.columns;
+        let even = cols %2 == 0;
+        let half = cols / 2;
+        let len = half + (if even { 0 } else { 1 });
+//println!("{cols} {even} {half} {len}");
+let this = self.clone();
+let mut shapes2 = shapes.clone_base();
+let mut cnt1 = 0;
+let mut cnt2 = 0;
+
+        let s1 = self.subshape(0, self.cells.rows, 0, len);
+        let s2 = self.subshape(0, self.cells.rows, half, len).mirrored_c();
+
+        if let Some(mut diff) = s1.diff(&s2) {
+            for cell in diff.cells.values_mut() {
+                cell.colour = if cell.colour.is_same() {
+                    cell.colour.to_base()
+                } else {
+cnt1 += 1;
+                    Black
+                };
+            }
+
+            shapes.shapes.push(diff.to_position(self.orow, self.ocol));
+            shapes.shapes.push(diff.mirrored_c().to_position(self.orow, self.ocol + half));
+//shapes.to_grid().show();
+        }
+
+        let s1 = this.subshape(0, self.cells.rows, 1, len);
+        //let s2 = this.subshape(0, self.cells.rows, half, len).mirrored_c();
+
+        if let Some(mut diff) = s1.diff(&s2) {
+            for cell in diff.cells.values_mut() {
+                cell.colour = if cell.colour.is_same() {
+                    cell.colour.to_base()
+                } else {
+cnt2 += 1;
+                    Black
+                };
+            }
+
+            shapes2.shapes.push(diff.to_position(self.orow, self.ocol + 1));
+            shapes2.shapes.push(diff.mirrored_c().to_position(self.orow, self.ocol + half));
+//shapes2.to_grid().show();
+//println!("### {cnt1} {cnt2}");
+        }
+
+        if cnt2 <= cnt1 {
+            shapes.shapes.pop();
+            shapes.shapes.pop();
+
+            for s in shapes2.shapes.iter() {
+                shapes.shapes.push(s.clone());
+            }
+        }
     }
 
     // must be odd size
@@ -1080,7 +1142,21 @@ println!("{:?}", dist.abs());
     }
 
     pub fn subshape(&self, tlr: usize, sr: usize, tlc: usize, sc: usize) -> Self {
-        self.to_grid().subgrid(tlr, sr, tlc, sc).as_shape()
+        if sr == 0 || sc == 0 {
+            return Self::trivial();
+        }
+
+        let mut m = Matrix::new(sr, sc, Cell::new(0, 0, 0));
+
+        for r in 0 ..  sr {
+            for c in 0 .. sc {
+                m[(r,c)].row = self.cells[(r + tlr,c + tlc)].row;
+                m[(r,c)].col = self.cells[(r + tlr,c + tlc)].col;
+                m[(r,c)].colour = self.cells[(r + tlr,c + tlc)].colour;
+            }
+        }
+
+        Self::new_cells(&m)
     }
 
     pub fn subshape_trim(&self, tlr: usize, sr: usize, tlc: usize, sc: usize) -> Self {
@@ -4424,6 +4500,70 @@ impl PartialEq<(Pos, usize)> for Successor {
         shapes
     }
 
+    // TODO: doesn't work yet: 60a26a3e and others
+    pub fn find_straight_pairs(&self) -> BTreeMap<Shape,Shape> {
+        let mut ss: BTreeMap<Shape, Shape> = BTreeMap::new();
+
+        for s in self.shapes.iter() {
+            let mut min_r = usize::MAX;
+            let mut min_c = usize::MAX;
+            let mut ns_r = Shape::trivial();
+            let mut ns_c = Shape::trivial();
+
+            for si in self.shapes.iter() {
+                if s != si {
+                   if s.orow == si.orow {
+                       let p = s.ocol.max(si.ocol) - s.ocol.min(si.ocol);
+println!("Row {} => {} {} {} {}", s.orow, s.ocol, si.ocol, p, min_c);
+
+                       if min_c == usize::MAX || p < min_c {
+                           if let Some(s2) = ss.get(&si) {
+println!("##1##");
+si.show_summary();
+s2.show_summary();
+println!("##1##");
+                           }
+                           if let Some(s2) = ss.get(&s) {
+println!("##2##");
+s.show_summary();
+s2.show_summary();
+println!("##2##");
+                           }
+                           min_c = p;
+                           ns_r = si.clone();
+                       }
+                   }
+                   if s.ocol == si.ocol {
+println!("Col {} => {} {}", s.orow, s.ocol, si.ocol);
+                       let p = s.orow.max(si.orow) - s.orow.min(si.orow);
+
+                       if min_r == usize::MAX || p < min_r {
+                           min_r = p;
+                           ns_c = si.clone();
+                       }
+                   }
+                }
+            }
+
+            if ns_r != Shape::trivial() {
+                if s.orow < ns_r.orow {
+                    ss.insert(s.clone(), ns_r);
+                } else {
+                    ss.insert(ns_r, s.clone());
+                }
+            }
+            if ns_c != Shape::trivial() {
+                if s.ocol < ns_c.ocol {
+                    ss.insert(s.clone(), ns_c);
+                } else {
+                    ss.insert(ns_c, s.clone());
+                }
+            }
+        }
+
+        ss
+    }
+
     pub fn group_containers(&self) -> BTreeMap<Shape, Vec<Shape>> {
         let mut ss: BTreeMap<Shape, Vec<Shape>> = BTreeMap::new();
 
@@ -5896,7 +6036,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
             s.show_summary();
             println!();
         }
-        println!("--------");
+        println!("--- {} / {} ---", self.nrows, self.ncols);
     }
 
     pub fn show(&self) {
@@ -5904,7 +6044,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
             s.show();
             println!();
         }
-        println!("--------");
+        println!("--- {} / {} ---", self.nrows, self.ncols);
     }
 
     pub fn show_full(&self) {
@@ -5912,7 +6052,7 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
             s.show_full();
             println!();
         }
-        println!("--------");
+        println!("--- {} / {} ---", self.nrows, self.ncols);
     }
 
     /*
@@ -5944,6 +6084,10 @@ println!("{}/{} {}/{}", shape.ox + shape.cells.rows, shape.oy + shape.cells.colu
             if s.orow + s.cells.rows > self.nrows || s.ocol + s.cells.columns > self.ncols {
                 let r = self.nrows.min(s.orow + s.cells.rows);
                 let c = self.ncols.min(s.ocol + s.cells.columns);
+
+                if r < s.orow || c < s.ocol {
+                    return Shapes::trivial();
+                }
 
                 if let Ok(mat) = s.cells.slice(0 .. r - s.orow, 0 .. c - s.ocol) {
                     trimmed.shapes.push(Shape::new_cells(&mat));

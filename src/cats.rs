@@ -144,7 +144,7 @@ impl Colour {
             92 => Self::Transparent,
             93 => Self::DiffShape,    // Naughty overlaying of enum
             94 => Self::Same,         // Naughty overlaying of enum
-            _ => todo!()
+            _ => Self::NoColour
         }
     }
 
@@ -243,61 +243,61 @@ impl Colour {
         &[Self::Black, Self::Blue, Self::Red, Self::Green, Self::Yellow, Self::Grey, Self::Fuchsia, Self::Orange, Self::Teal, Self::Brown]
     }
 
-    pub fn is_unit(&self) -> bool {
-        *self > Self::Black && *self <= Self::Brown
+    pub fn is_unit(self) -> bool {
+        self > Self::Black && self <= Self::Brown
     }
 
-    pub fn is_to(&self) -> bool {
-        *self > Self::ToBlack && *self <= Self::ToBrown
+    pub fn is_to(self) -> bool {
+        self > Self::ToBlack && self <= Self::ToBrown
     }
 
-    pub fn is_from(&self) -> bool {
-        *self >= Self::FromBlack && *self <= Self::FromBrown
+    pub fn is_from(self) -> bool {
+        self >= Self::FromBlack && self <= Self::FromBrown
     }
 
-    pub fn is_same(&self) -> bool {
-        *self >= Self::SameBlack && *self <= Self::SameBrown
+    pub fn is_same(self) -> bool {
+        self >= Self::SameBlack && self <= Self::SameBrown
     }
 
-    pub fn is_diff(&self) -> bool {
-        *self >= Self::DiffBlack && *self <= Self::DiffBrown
+    pub fn is_diff(self) -> bool {
+        self >= Self::DiffBlack && self <= Self::DiffBrown
     }
 
-    pub fn is_orig(&self) -> bool {
-        *self >= Self::OrigBlack && *self <= Self::OrigBrown
+    pub fn is_orig(self) -> bool {
+        self >= Self::OrigBlack && self <= Self::OrigBrown
     }
 
-    pub fn and(&self, other: &Self) -> Self {
-        if *self == Self::Black || *other == Self::Black || self != other {
+    pub fn and(self, other: Self) -> Self {
+        if self == Self::Black || other == Self::Black || self != other {
             Self::Black
         } else {
-            *self
+            self
         }
     }
 
-    pub fn or(&self, other: &Self) -> Self {
-        if *self == Self::Black {
-            if *other == Self::Black {
+    pub fn or(self, other: Self) -> Self {
+        if self == Self::Black {
+            if other == Self::Black {
                 Self::Black
             } else {
-                *other
+                other
             }
-        } else if *other == Self::Black || *self == *other {
-            *self
+        } else if other == Self::Black || self == other {
+            self
         } else {
             Self::Black
         }
     }
 
-    pub fn xor(&self, other: &Self) -> Self {
-        if *self == Self::Black {
-            if *other == Self::Black {
+    pub fn xor(self, other: Self) -> Self {
+        if self == Self::Black {
+            if other == Self::Black {
                 Self::Black
             } else {
-                *other
+                other
             }
-        } else if *other == Self::Black {
-            *self
+        } else if other == Self::Black {
+            self
         } else {
             Self::Black
         }
@@ -323,8 +323,8 @@ impl Colour {
         (0 ..= 9).map(Colour::from_usize).collect()
     }
 
-    pub fn get_position(&self, v: &[Colour]) -> usize {
-        v.iter().position(|&ac| ac == *self).unwrap_or(0)
+    pub fn get_position(self, v: &[Colour]) -> usize {
+        v.iter().position(|&ac| ac == self).unwrap_or(0)
     }
 }
 
